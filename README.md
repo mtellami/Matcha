@@ -97,3 +97,5 @@ Registration is committed before contacting SMTP, so a mail outage does not lose
 New account emails put the one-time token in the URL fragment, so the token is not sent in the page request or HTTP referrer. Existing query-string links remain accepted until they expire.
 
 Uploads are decoded, checked, resized, oriented, and re-encoded as JPEG with metadata removed. Removing a photo updates the profile transactionally; the backend retries physical S3 deletion separately if storage is unavailable. Uploads that fail to publish retain a cleanup reservation, so a database rollback does not leak an untracked object. No additional container or setup command is required.
+
+Password resets and email confirmations serialize with login, session, and presence writes for the same account. A password reset cannot leave a session created using the old password alive. Completing a reset or an email change revokes that account's sessions and pending account links; confirming a new email also invalidates reset links issued to the previous address. The user signs in again afterward.

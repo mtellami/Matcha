@@ -168,7 +168,26 @@ def handle_error(exc):
     )
 
 
+def lock_account(conn, user_id, session_token=None):
+    # Credential changes and session/presence writes always lock the user first.
+    user = conn.execute(
+        "SELECT * FROM users WHERE id=%s FOR UPDATE", (user_id,)
+    ).fetchone()
+    if not user:
+        fail("Please sign in", 401)
+    if (
+        session_token
+        and not conn.execute(
+            "SELECT 1 FROM sessions WHERE token=%s AND user_id=%s AND expires_at>clock_timestamp()",
+            (session_token, user_id),
+        ).fetchone()
+    ):
+        fail("Please sign in", 401)
+    return user
+
+
 def email_token(conn, user, kind):
+    lock_account(conn, user["id"])
     token = secrets.token_urlsafe(32)
     conn.execute("DELETE FROM tokens WHERE user_id=%s AND kind=%s", (user["id"], kind))
     conn.execute(
@@ -238,7 +257,7 @@ def login():
         fail("Invalid username or password", 401)
     with db() as conn:
         user = conn.execute(
-            "SELECT * FROM users WHERE username=%s",
+            "SELECT * FROM users WHERE username=%s FOR UPDATE",
             (text(d.get("username"), "Username", 30).lower(),),
         ).fetchone()
         try:
@@ -278,7 +297,7 @@ def reset_request():
     d = data()
     with db() as conn:
         user = conn.execute(
-            "SELECT * FROM users WHERE email=%s",
+            "SELECT * FROM users WHERE email=%s FOR UPDATE",
             (text(d.get("email"), "Email", 254).lower(),),
         ).fetchone()
         message = email_token(conn, user, "reset") if user else None
@@ -295,10 +314,34 @@ def redeem():
     kind = d.get("kind")
     if kind not in ("verify", "reset", "email"):
         fail("Invalid token purpose")
+    hashed_token = digest(text(d.get("token"), "Token"))
     with db() as conn:
+        candidate = conn.execute(
+            """SELECT t.user_id,u.username,u.first_name,u.last_name,u.email FROM tokens t
+            JOIN users u ON u.id=t.user_id WHERE t.token=%s AND t.kind=%s AND t.expires_at>clock_timestamp()""",
+            (hashed_token, kind),
+        ).fetchone()
+        if not candidate:
+            fail("Link expired or already used")
+        new_hash = (
+            ph.hash(
+                password(
+                    d.get("password"),
+                    [
+                        candidate["username"],
+                        candidate["first_name"],
+                        candidate["last_name"],
+                        candidate["email"],
+                    ],
+                )
+            )
+            if kind == "reset"
+            else None
+        )
+        lock_account(conn, candidate["user_id"])
         token = conn.execute(
-            "DELETE FROM tokens WHERE token=%s AND kind=%s AND expires_at>now() RETURNING *",
-            (digest(text(d.get("token"), "Token")), kind),
+            "DELETE FROM tokens WHERE token=%s AND kind=%s AND expires_at>clock_timestamp() RETURNING *",
+            (hashed_token, kind),
         ).fetchone()
         if not token:
             fail("Link expired or already used")
@@ -314,14 +357,21 @@ def redeem():
         else:
             conn.execute(
                 "UPDATE users SET password_hash=%s WHERE id=%s",
-                (ph.hash(password(d.get("password"))), token["user_id"]),
+                (new_hash, token["user_id"]),
             )
+        if kind in ("reset", "email"):
+            conn.execute("DELETE FROM tokens WHERE user_id=%s", (token["user_id"],))
             conn.execute("DELETE FROM sessions WHERE user_id=%s", (token["user_id"],))
+        else:
+            conn.execute(
+                "DELETE FROM tokens WHERE user_id=%s AND kind='verify'",
+                (token["user_id"],),
+            )
     return {
         "message": {
             "verify": "Account verified",
-            "email": "Email updated",
-            "reset": "Password updated",
+            "email": "Email updated. Please sign in again.",
+            "reset": "Password updated. Please sign in again.",
         }[kind]
     }
 
@@ -330,6 +380,7 @@ def redeem():
 @auth
 def logout():
     with db() as conn:
+        lock_account(conn, g.uid)
         conn.execute(
             "DELETE FROM sessions WHERE token=%s", (digest(request.cookies["session"]),)
         )
@@ -833,6 +884,7 @@ def change_email():
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", new):
         fail("Enter a valid email", field="email")
     with db() as conn:
+        lock_account(conn, g.uid, g.session_token)
         if conn.execute("SELECT 1 FROM users WHERE email=%s", (new,)).fetchone():
             fail("Email unavailable", 409, field="email")
         message = email_token(conn, {"id": g.uid, "email": new}, "email")
@@ -974,6 +1026,7 @@ def is_online(conn, uid):
 def presence():
     tab = text(data().get("tab_id"), "Tab identifier", 100)
     with db() as conn:
+        lock_account(conn, g.uid, g.session_token)
         if request.method == "DELETE":
             conn.execute(
                 "DELETE FROM presence WHERE session_token=%s AND tab_id=%s",
@@ -1107,7 +1160,7 @@ def verification_request():
         fail("Enter a valid email", field="email")
     with db() as conn:
         user = conn.execute(
-            "SELECT * FROM users WHERE email=%s AND NOT verified", (email,)
+            "SELECT * FROM users WHERE email=%s AND NOT verified FOR UPDATE", (email,)
         ).fetchone()
         message = email_token(conn, user, "verify") if user else None
     if message:

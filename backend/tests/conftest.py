@@ -9,11 +9,15 @@ def client(monkeypatch):
     if not url:
         pytest.skip("TEST_DATABASE_URL is required")
     monkeypatch.setenv("DATABASE_URL", url)
-    from app import app
+    from app import app, db as original_db
 
     app.config["TESTING"] = True
+    address = f"198.18.{secrets.randbelow(256)}.{secrets.randbelow(254)+1}"
     with app.test_client() as client:
+        client.environ_base["REMOTE_ADDR"] = address
         yield client
+    with original_db() as conn:
+        conn.execute("DELETE FROM request_limits WHERE key=%s", (address,))
 
 
 @pytest.fixture

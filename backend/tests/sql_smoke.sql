@@ -77,6 +77,34 @@ DO $$ BEGIN
     ASSERT EXISTS(SELECT 1 FROM photos WHERE filename='sql-smoke-live.jpg'),'Removal rollback lost profile metadata';
 END $$;
 
+/* Recovery must revoke every session and pending account link for the same user only. */
+DO $$
+DECLARE a bigint; b bigint;
+BEGIN
+    SELECT id INTO a FROM users WHERE username='sql_smoke_1';
+    SELECT id INTO b FROM users WHERE username='sql_smoke_2';
+    INSERT INTO sessions VALUES('recovery-session',a,'recovery-csrf',now()+interval '1 hour');
+    INSERT INTO presence VALUES('recovery-session','recovery-tab',now()+interval '20 seconds');
+    INSERT INTO tokens(token,user_id,kind,expires_at,pending_email) VALUES
+        ('reset-link',a,'reset',now()+interval '1 hour',NULL),
+        ('pending-email-link',a,'email',now()+interval '1 hour','pending@example.test'),
+        ('other-account-link',b,'reset',now()+interval '1 hour',NULL);
+    PERFORM id FROM users WHERE id=a FOR UPDATE;
+    ASSERT EXISTS(SELECT 1 FROM tokens WHERE token='reset-link' AND kind='reset' AND expires_at>clock_timestamp()),'Valid reset token not found';
+    DELETE FROM tokens WHERE token='reset-link' AND kind='reset' AND expires_at>clock_timestamp();
+    ASSERT NOT EXISTS(SELECT 1 FROM tokens WHERE token='reset-link'),'Reset token was reusable';
+    UPDATE users SET password_hash='new-placeholder-hash' WHERE id=a;
+    DELETE FROM tokens WHERE user_id=a;
+    DELETE FROM sessions WHERE user_id=a;
+    ASSERT NOT EXISTS(SELECT 1 FROM tokens WHERE user_id=a),'Recovery retained an account-change link';
+    ASSERT NOT EXISTS(SELECT 1 FROM sessions WHERE user_id=a),'Recovery retained a session';
+    ASSERT NOT EXISTS(SELECT 1 FROM presence WHERE session_token='recovery-session'),'Recovery retained presence';
+    ASSERT EXISTS(SELECT 1 FROM tokens WHERE token='other-account-link'),'Recovery revoked another account';
+    INSERT INTO tokens(token,user_id,kind,expires_at) VALUES('short-lived-link',a,'reset',clock_timestamp()+interval '5 milliseconds');
+    PERFORM pg_sleep(0.01);
+    ASSERT NOT EXISTS(SELECT 1 FROM tokens WHERE token='short-lived-link' AND expires_at>clock_timestamp()),'Wall-clock expiry check accepted an expired token';
+END $$;
+
 EXPLAIN (ANALYZE,BUFFERS,TIMING OFF)
 SELECT u.id,u.username,u.first_name,u.last_name,u.birth_date,u.gender,u.bio,u.city,u.tags,u.latitude,u.longitude,
        (SELECT count(*) FROM likes WHERE target=u.id) AS likes,
