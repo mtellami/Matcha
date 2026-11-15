@@ -25,6 +25,7 @@ export function Activity({ run, openProfile, changed, revision, busy }: {
   const [next, setNext] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [announcement, setAnnouncement] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const notificationFloor = useRef<number | null>(null);
@@ -91,6 +92,7 @@ export function Activity({ run, openProfile, changed, revision, busy }: {
     if (item.is_read) return;
     await api(`/notifications/${item.id}/read`, "POST");
     reload();
+    setAnnouncement(`Notification from ${item.username} marked as read.`);
     setNotifications((items) => unreadOnly
       ? items.filter((n) => n.id !== item.id)
       : items.map((n) => n.id === item.id ? { ...n, is_read: true } : n));
@@ -101,6 +103,7 @@ export function Activity({ run, openProfile, changed, revision, busy }: {
     if (!through) return;
     await api("/notifications/read", "POST", { through_id: through });
     reload();
+    setAnnouncement("Notifications marked as read.");
     setNotifications((items) => unreadOnly
       ? items.filter((n) => n.id > through)
       : items.map((n) => n.id <= through ? { ...n, is_read: true } : n));
@@ -144,6 +147,7 @@ export function Activity({ run, openProfile, changed, revision, busy }: {
           document.getElementById(`activity-tab-${tabs[target][0]}`)?.focus();
         }}>{label}</button>)}
     </div>
+    <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
     <div role="tabpanel" id="activity-panel" aria-labelledby={`activity-tab-${tab}`}>
       <div className="actions activity-controls">
         <button disabled={loading || busy} onClick={reload}>Refresh</button>

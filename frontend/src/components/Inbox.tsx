@@ -15,6 +15,7 @@ export function Inbox({
   const [items, setItems] = useState<Conversation[]>([]),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let active = true,
       inFlight = false;
@@ -42,23 +43,42 @@ export function Inbox({
       active = false;
       clearInterval(timer);
     };
-  }, [revision]);
+  }, [revision, refresh]);
   return (
     <>
       <div className="eyebrow">A GOOD CONVERSATION STARTS HERE</div>
       <h1>
         Your <em>connections.</em>
       </h1>
-      {loading && <p role="status">Loading connections…</p>}
+      <p className="sr-only" role="status" aria-live="polite">
+        {loading
+          ? "Loading conversations."
+          : error
+            ? "Conversations could not be refreshed."
+            : `${items.length} conversations loaded.`}
+      </p>
+      <div className="actions">
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            setLoading(true);
+            setRefresh((value) => value + 1);
+          }}
+        >
+          {error ? "Try again" : "Refresh conversations"}
+        </button>
+      </div>
       {error && (
         <p role="alert" className="alert">
           {error}
         </p>
       )}
-      <div className="activity">
+      <div className="activity" aria-busy={loading}>
         {items.map((item) => (
           <button
             key={item.id}
+            aria-label={`Open conversation with ${item.first_name}${item.unread > 0 ? `, ${item.unread} unread messages` : ""}`}
             onClick={() => void run(() => openProfile(item.id))}
           >
             {item.photo_id ? (
@@ -76,7 +96,10 @@ export function Inbox({
               {item.preview || "You connected. Say hello!"}
             </span>
             {item.unread > 0 && (
-              <span className="badge">{item.unread} unread</span>
+              <span className="badge">
+                <span className="sr-only">Unread messages: </span>
+                {item.unread} unread
+              </span>
             )}
           </button>
         ))}

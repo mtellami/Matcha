@@ -210,7 +210,7 @@ export function ProfileDetail({
               {activePhoto ? (
                 <img
                   src={"/api/v1/photos/" + activePhoto}
-                  alt={profile.first_name}
+                  alt={`${profile.first_name}’s profile photo`}
                 />
               ) : (
                 <Leaf size={100} />
@@ -218,9 +218,9 @@ export function ProfileDetail({
             </div>
             {(profile.photos?.length || 0) > 1 && (
               <div className="photo-row gallery">
-                {profile.photos?.map((photo) => (
+                {profile.photos?.map((photo, index) => (
                   <button
-                    aria-label="View photo"
+                    aria-label={`View ${profile.first_name}’s photo ${index + 1} of ${profile.photos?.length}`}
                     aria-pressed={activePhoto === photo.id}
                     key={photo.id}
                     onClick={() => setActivePhoto(photo.id)}
@@ -239,7 +239,7 @@ export function ProfileDetail({
               {profile.first_name}
               {profile.age !== null && ", " + profile.age}
             </h1>
-            <p className="presence">
+            <p className="presence" role="status" aria-live="polite">
               {profile.online
                 ? "● Online now"
                 : profile.last_seen
@@ -325,13 +325,24 @@ export function ProfileDetail({
                     Older messages
                   </button>
                 )}
-                <div className="messages" aria-label="Messages">
+                <div
+                  className="messages"
+                  role="log"
+                  aria-label={`Conversation with ${profile.first_name}`}
+                  aria-live="polite"
+                  aria-relevant="additions text"
+                >
                   {messages.map((message) => (
                     <div
                       className={message.actor === myId ? "sent" : "received"}
                       key={message.id}
                       data-message-id={message.id}
                     >
+                      <span className="sr-only">
+                        {message.actor === myId
+                          ? "You sent: "
+                          : `${profile.first_name} sent: `}
+                      </span>
                       {message.body}
                       <small ref={message.id === lastId ? readMarker : undefined}>
                         {new Date(message.created_at).toLocaleTimeString([], {

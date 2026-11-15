@@ -205,6 +205,7 @@ export default function App() {
               <button
                 className={view === key ? "active" : ""}
                 aria-current={view === key ? "page" : undefined}
+                aria-label={count ? `${label}, ${count} unread` : label}
                 key={key}
                 onClick={() => navigate(key)}
               >
@@ -240,7 +241,7 @@ export default function App() {
           )}
         </div>
       </header>
-      <main data-connection-state={me ? connection : undefined}>
+      <main aria-busy={busy} data-connection-state={me ? connection : undefined}>
         {me && connection === "reconnecting" && (
           <p className="connection-note" role="status">
             Reconnecting… You can keep browsing.

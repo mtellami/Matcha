@@ -34,6 +34,9 @@ export function ProfileEditor({
   });
   const [city, setCity] = useState(me.city || "");
   const [places, setPlaces] = useState<Location[]>([]);
+  const [placesLoading, setPlacesLoading] = useState(true);
+  const [placesFailed, setPlacesFailed] = useState(false);
+  const [placesRetry, setPlacesRetry] = useState(0);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [locationSource, setLocationSource] = useState(
     me.city && me.latitude !== null ? "saved" : "manual",
@@ -62,17 +65,21 @@ export function ProfileEditor({
       undefined,
       controller.signal,
     )
-      .then((d) => setPlaces(d.locations))
-      .catch(() =>
-        setLocationNote(
-          "City suggestions are unavailable. Try again or use GPS.",
-        ),
-      );
+      .then((d) => {
+        setPlaces(d.locations);
+        setPlacesFailed(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setPlacesFailed(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPlacesLoading(false);
+      });
     api<{ tags: string[] }>("/tags", "GET", undefined, controller.signal)
       .then((d) => setKnownTags(d.tags))
       .catch(() => {});
     return () => controller.abort();
-  }, []);
+  }, [placesRetry]);
   function gps() {
     if (!navigator.geolocation) {
       setLocationNote("Geolocation is unavailable. Choose a city instead.");
@@ -335,10 +342,25 @@ export function ProfileEditor({
           <button type="button" onClick={gps}>
             Use GPS with my permission
           </button>
-          <small role="status">
-            {locationNote ||
-              "Only approximate coordinates are stored. GPS is optional."}
+          <small role="status" aria-live="polite">
+            {placesLoading
+              ? "Loading city suggestions…"
+              : locationNote ||
+                (placesFailed
+                  ? "City suggestions are unavailable. You can retry or use GPS."
+                  : "Only approximate coordinates are stored. GPS is optional.")}
           </small>
+          {placesFailed && !placesLoading && (
+            <button
+              type="button"
+              onClick={() => {
+                setPlacesLoading(true);
+                setPlacesRetry((value) => value + 1);
+              }}
+            >
+              Retry city suggestions
+            </button>
+          )}
         </fieldset>
         <button className="primary" disabled={busy}>
           Save profile <ArrowUpRight size={18} />
@@ -348,7 +370,7 @@ export function ProfileEditor({
         <h2 id="photos-heading">Your photos</h2>
         <p>Up to five photos. Choose the picture people see first.</p>
         <div className="photo-row">
-          {me.photos.map((photo) => (
+          {me.photos.map((photo, index) => (
             <div className="photo-item" key={photo.id}>
               <img
                 src={"/api/v1/photos/" + photo.id}
@@ -359,6 +381,7 @@ export function ProfileEditor({
               ) : (
                 <button
                   disabled={busy}
+                  aria-label={`Make photo ${index + 1} your profile picture`}
                   onClick={() =>
                     void run(async () => {
                       await api("/me/photos/" + photo.id, "PUT");
@@ -371,6 +394,7 @@ export function ProfileEditor({
               )}
               <button
                 disabled={busy}
+                aria-label={`Remove photo ${index + 1}`}
                 onClick={() =>
                   void run(async () => {
                     await api("/me/photos/" + photo.id, "DELETE");
