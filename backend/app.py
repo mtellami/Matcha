@@ -5,7 +5,7 @@ import secrets
 import threading
 import time
 from datetime import date
-from functools import wraps
+from functools import cmp_to_key, wraps
 from io import BytesIO
 
 import storage
@@ -572,20 +572,25 @@ def profiles():
         if filters.accepts(u):
             result.append(u)
     key = filters.sort
-    result.sort(
-        key=lambda u: (
-            (
-                u["city"].casefold() != own["city"].casefold(),
-                u["distance"],
-                -u["common_tags"],
-                -u["fame"],
-                u["id"],
-            )
-            if key == "suggested"
-            else (u[key], u["id"])
-        ),
-        reverse=filters.direction == "desc",
-    )
+    if key == "suggested":
+        descending = filters.direction == "desc"
+
+        def compare_suggestions(a, b):
+            a_local = a["city"].casefold() == own["city"].casefold()
+            b_local = b["city"].casefold() == own["city"].casefold()
+            if a_local != b_local:
+                return -1 if a_local else 1
+            a_rank = (a["distance"], -a["common_tags"], -a["fame"], a["id"])
+            b_rank = (b["distance"], -b["common_tags"], -b["fame"], b["id"])
+            comparison = (a_rank > b_rank) - (a_rank < b_rank)
+            return -comparison if descending else comparison
+
+        result.sort(key=cmp_to_key(compare_suggestions))
+    else:
+        result.sort(
+            key=lambda u: (u[key], u["id"]),
+            reverse=filters.direction == "desc",
+        )
     return jsonify(
         profiles=result[(filters.page - 1) * 24 : filters.page * 24],
         total=len(result),
