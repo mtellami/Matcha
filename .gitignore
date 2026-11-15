@@ -1,0 +1,14 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+node_modules/
+dist/
+uploads/
+*.pyc
+.env.*
+!.env.example
+IMPLEMENTATION.md
+requirements.pdf
+playwright-report/
+test-results/
