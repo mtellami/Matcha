@@ -90,6 +90,8 @@ npm run test:e2e
 
 The scenarios run on Chromium, installed Google Chrome (`channel: chrome`), Firefox, and a mobile viewport. Install Google Chrome separately for the `chrome` project, or select the other projects explicitly. They use the synthetic `demo1`/`demo2` accounts, exercise real chat, and leave test messages in the development database. They restore the original interest state after chat scenarios. Valid demo sessions are reused within a test worker to respect authentication throttling; logout still revokes them normally. Do not run them against production. Set `PLAYWRIGHT_BASE_URL` if the development app uses a different URL.
 
+The account-email acceptance suite uses the development SMTP inbox (Mailpit) and creates isolated test accounts. Keep the development stack running with `make dev`, then run it on Chromium with `cd frontend && npm run test:e2e -- e2e/account-email.spec.ts --project chromium`. Set `MAILPIT_API_URL` if Mailpit's API is not at `http://localhost:8025/api/v1`. It covers verification-link single use, resend delivery, password-reset session revocation, and email-change activation plus reset delivery to the new address.
+
 ## Live updates and recovery
 
 The browser uses the existing Socket.IO endpoint for update hints and refreshes authenticated data on connection/reconnection. Five-second HTTP polling continues if sockets are unavailable. Session heartbeats close expired sockets; logout disconnects the local client.
