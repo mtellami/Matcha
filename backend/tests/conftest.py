@@ -3,6 +3,15 @@ import secrets
 import pytest
 
 
+@pytest.fixture(scope="session", autouse=True)
+def close_database_pool():
+    yield
+    # Stop workers before Python begins tearing down interpreter threads.
+    import app
+
+    app.pool.close()
+
+
 @pytest.fixture
 def client(monkeypatch):
     url = os.getenv("TEST_DATABASE_URL")

@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 from PIL import Image, ImageDraw
 from argon2 import PasswordHasher
-from app import db, create_photo
+from app import db, create_photo, pool
 
 
 def migrate():
@@ -93,4 +93,7 @@ if __name__ == "__main__":
     }
     if len(sys.argv) != 2 or sys.argv[1] not in commands:
         raise SystemExit("Usage: python manage.py migrate|seed|storage-init|reports")
-    commands[sys.argv[1]]()
+    try:
+        commands[sys.argv[1]]()
+    finally:
+        pool.close()

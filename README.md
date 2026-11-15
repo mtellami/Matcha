@@ -46,14 +46,16 @@ Photos remain private and are served through authenticated backend requests. Dat
 
 ## Checks
 
+New members see a profile-completion checklist before discovery. Each item opens its field in **My profile**. Select reusable interest buttons or enter your own tags, then save. **Preview my public profile** shows the saved public view, including your fame rating. A photo is required before expressing interest.
+
 ```sh
-npm --prefix frontend install
+npm --prefix frontend ci
 npm --prefix frontend run build
 npm --prefix frontend test
 
 cd backend
 uv venv
-uv pip install -r requirements.txt
+uv pip install -r requirements.lock
 uv run python -m pytest tests -q
 ```
 
@@ -77,7 +79,7 @@ To run browser acceptance checks against the seeded development app:
 make dev
 make dev-seed
 cd frontend
-npm install
+npm ci
 npx playwright install chromium firefox
 npm run test:e2e
 ```

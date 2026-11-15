@@ -12,3 +12,4 @@ IMPLEMENTATION.md
 requirements.pdf
 playwright-report/
 test-results/
+*.tsbuildinfo
