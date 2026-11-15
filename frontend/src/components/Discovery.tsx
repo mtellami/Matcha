@@ -84,6 +84,15 @@ export function Discovery({
             <h2>
               People you might click with <span>{result?.total ?? "…"}</span>
             </h2>
+            <p className="sr-only" role="status" aria-live="polite">
+              {loading
+                ? "Updating your suggestions."
+                : error
+                  ? "Your suggestions could not be updated."
+                  : result
+                    ? `${result.total} profiles found. Page ${result.page} of ${Math.max(1, Math.ceil(result.total / result.page_size))}.`
+                    : ""}
+            </p>
             <p>A little closer to your world.</p>
           </div>
           <div className="search-controls">
@@ -213,13 +222,14 @@ export function Discovery({
                 <button
                   className="card"
                   key={person.id}
+                  aria-label={`View ${person.first_name}, age ${person.age}, in ${person.city}`}
                   onClick={() => void run(() => openProfile(person.id))}
                 >
                   <div className={"card-image color-" + (index % 4)}>
                     {person.photo_id ? (
                       <img
                         src={"/api/v1/photos/" + person.photo_id}
-                        alt={person.first_name}
+                        alt={`${person.first_name}’s profile photo`}
                         loading="lazy"
                       />
                     ) : (
@@ -230,7 +240,7 @@ export function Discovery({
                     )}
                     <span className="distance">{person.distance} km away</span>
                     <span className="heart">
-                      <Heart size={19} />
+                      <Heart size={19} aria-hidden="true" />
                     </span>
                   </div>
                   <div className="card-body">
@@ -263,9 +273,10 @@ export function Discovery({
             </div>
           )}
           {result && result.total > 24 && !error && (
-            <div className="pagination">
+            <nav className="pagination" aria-label="Profile results pages">
               <button
                 disabled={result.page <= 1}
+                aria-label="Previous results page"
                 onClick={() => page(result.page - 1)}
               >
                 Previous
@@ -275,11 +286,12 @@ export function Discovery({
               </span>
               <button
                 disabled={result.page * 24 >= result.total}
+                aria-label="Next results page"
                 onClick={() => page(result.page + 1)}
               >
                 Next
               </button>
-            </div>
+            </nav>
           )}
         </>
       )}
