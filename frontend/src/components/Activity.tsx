@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Heart } from "lucide-react";
 import { api } from "../api";
 import type { Activity as ActivityData, Notification, Runner } from "../types";
+import { InterestList } from "./InterestList";
 
 const labels: Record<string, string> = {
   visit: "viewed your profile",
@@ -15,11 +16,13 @@ export function Activity({
   openProfile,
   changed,
   revision,
+  busy,
 }: {
   run: Runner;
   openProfile: (id: number) => Promise<void>;
   changed: () => Promise<void>;
   revision: string;
+  busy: boolean;
 }) {
   const [tab, setTab] = useState("notifications");
   const [activity, setActivity] = useState<ActivityData | null>(null);
@@ -56,6 +59,7 @@ export function Activity({
   }, [refresh, revision]);
   const visitors = activity?.visitors || [],
     likes = activity?.likes || [],
+    sent = activity?.sent || [],
     blocks = activity?.blocks || [];
   const count =
     tab === "notifications"
@@ -64,7 +68,13 @@ export function Activity({
         ? visitors.length
         : tab === "likes"
           ? likes.length
-          : blocks.length;
+          : tab === "sent" ? sent.length : blocks.length;
+  async function changeInterest(id: number, remove: boolean) {
+    await api(`/profiles/${id}/like`, remove ? "DELETE" : "POST");
+    const response = await api<ActivityData>("/me/activity");
+    setActivity(response);
+    await changed();
+  }
   return (
     <>
       <div className="eyebrow">YOUR CONNECTIONS</div>
@@ -78,6 +88,7 @@ export function Activity({
           ["notifications", "Notifications"],
           ["visitors", "Visitors"],
           ["likes", "Received interest"],
+          ["sent", "Sent interest"],
           ["blocks", "Blocked users"],
         ].map(([key, label]) => (
           <button
@@ -152,18 +163,9 @@ export function Activity({
                 <small>{new Date(item.created_at).toLocaleString()}</small>
               </button>
             ))}
-          {tab === "likes" &&
-            likes.map((item) => (
-              <button
-                key={item.actor}
-                onClick={() => void run(() => openProfile(item.actor))}
-              >
-                <Heart size={20} />
-                <span>
-                  <strong>{item.username}</strong> is interested in you
-                </span>
-              </button>
-            ))}
+          {(tab === "likes" || tab === "sent") && <InterestList
+            items={tab === "sent" ? sent : likes} sent={tab === "sent"}
+            busy={busy} run={run} openProfile={openProfile} changeInterest={changeInterest} />}
           {tab === "blocks" &&
             blocks.map((item) => (
               <div className="blocked-row" key={item.actor}>
@@ -181,7 +183,7 @@ export function Activity({
                 </button>
               </div>
             ))}
-          {!count && <p>No {tab === "likes" ? "received likes" : tab} yet.</p>}
+          {!count && tab !== "likes" && tab !== "sent" && <p>No {tab} yet.</p>}
         </div>
       )}
       {!loading && tab === "notifications" && next && (

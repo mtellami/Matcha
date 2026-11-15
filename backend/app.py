@@ -861,17 +861,31 @@ def activity():
             ORDER BY v.id DESC LIMIT 51""",
             (g.uid, cursor()),
         ).fetchall()
-        likes = conn.execute(
-            "SELECT l.actor,u.username FROM likes l JOIN users u ON u.id=l.actor WHERE l.target=%s",
-            (g.uid,),
+        relationships = conn.execute(
+            """SELECT u.id AS actor,u.username,u.first_name,u.city,
+            (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id,
+            l.actor=%s AS sent,
+            EXISTS(SELECT 1 FROM likes reciprocal
+              WHERE reciprocal.actor=l.target AND reciprocal.target=l.actor) AS connected
+            FROM likes l JOIN users u
+              ON u.id=CASE WHEN l.actor=%s THEN l.target ELSE l.actor END
+            WHERE (l.actor=%s OR l.target=%s) AND u.verified
+            AND NOT EXISTS(SELECT 1 FROM blocks b WHERE
+              (b.actor=%s AND b.target=u.id) OR (b.actor=u.id AND b.target=%s))
+            ORDER BY lower(u.first_name),u.id""",
+            (g.uid, g.uid, g.uid, g.uid, g.uid, g.uid),
         ).fetchall()
         blocks = conn.execute(
             "SELECT b.target AS actor,u.username FROM blocks b JOIN users u ON u.id=b.target WHERE b.actor=%s",
             (g.uid,),
         ).fetchall()
+    likes, sent = [], []
+    for relationship in relationships:
+        (sent if relationship.pop("sent") else likes).append(relationship)
     return jsonify(
         visitors=visitors[:50],
         likes=likes,
+        sent=sent,
         blocks=blocks,
         next_before=visitors[49]["id"] if len(visitors) > 50 else None,
     )

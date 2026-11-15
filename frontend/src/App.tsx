@@ -315,6 +315,7 @@ export default function App() {
           />
         ) : view === "notifications" ? (
           <Activity
+            busy={busy}
             run={run}
             openProfile={openProfile}
             changed={refreshSummary}

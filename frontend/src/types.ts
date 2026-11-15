@@ -61,6 +61,14 @@ export type Conversation = {
   preview: string | null;
   unread: number;
 };
+export type Interest = {
+  actor: number;
+  username: string;
+  first_name: string;
+  city: string | null;
+  photo_id: number | null;
+  connected: boolean;
+};
 export type Activity = {
   visitors: {
     id: number;
@@ -68,7 +76,8 @@ export type Activity = {
     username: string;
     created_at: string;
   }[];
-  likes: { actor: number; username: string }[];
+  likes: Interest[];
+  sent: Interest[];
   blocks: { actor: number; username: string }[];
   next_before: number | null;
 };
