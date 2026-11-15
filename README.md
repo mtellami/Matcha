@@ -93,3 +93,5 @@ Chat catches up with `GET /api/v1/conversations/{id}/messages?after={last_id}` i
 Browser acceptance tests also cover a 120-message offline burst and socket-blocked polling fallback. The standalone SQL smoke file can be run against a migrated disposable database with `psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/tests/sql_smoke.sql`. It inserts 500 synthetic profiles and rolls them back after assertions and an EXPLAIN check.
 
 Registration is committed before contacting SMTP, so a mail outage does not lose the account. Use **Resend verification email** on the sign-in screen if a link is missing or expired. Reset and resend requests use generic responses for unknown accounts. An email-change delivery failure keeps the current email active and can be retried.
+
+New account emails put the one-time token in the URL fragment, so the token is not sent in the page request or HTTP referrer. Existing query-string links remain accepted until they expire.

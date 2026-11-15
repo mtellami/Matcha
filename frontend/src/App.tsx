@@ -27,7 +27,9 @@ export default function App() {
     messages: 0,
   });
   const [link, setLink] = useState(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(
+      location.hash.length > 1 ? location.hash.slice(1) : location.search,
+    );
     return { action: params.get("action"), token: params.get("token") };
   });
   const [revision, setRevision] = useState(0);

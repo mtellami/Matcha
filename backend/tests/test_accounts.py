@@ -55,7 +55,7 @@ def test_registration_survives_smtp_outage_and_verification_can_be_resent(
             for line in delivered[0].get_content().splitlines()
             if line.startswith("http")
         )
-        token = parse_qs(urlparse(link).query)["token"][0]
+        token = parse_qs(urlparse(link).fragment)["token"][0]
         assert (
             client.post(
                 "/api/v1/auth/token", json={"kind": "verify", "token": token}

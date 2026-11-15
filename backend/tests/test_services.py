@@ -131,7 +131,7 @@ def test_account_messages_have_single_use_links_and_no_passwords(kind, monkeypat
         and message["From"] == "hello@example.test"
     )
     assert (
-        f"https://matcha.example/?action={kind}&token=opaque-token"
+        f"https://matcha.example/#action={kind}&token=opaque-token"
         in message.get_content()
     )
     assert "one hour" in message.get_content()
@@ -164,3 +164,12 @@ def test_successful_delivery_is_reported(monkeypatch):
         "member@example.test", "verify", "token", "https://matcha.example"
     )
     assert mailer.deliver_account_message(message) is True and sent == [message]
+
+
+def test_email_link_does_not_send_token_in_http_request_or_referrer():
+    from urllib.parse import urlparse,parse_qs
+    message=mailer.account_message('member@example.test','verify','secret-token','https://matcha.example')
+    url=next(line for line in message.get_content().splitlines() if line.startswith('http'))
+    parsed=urlparse(url)
+    assert parsed.query=='' and 'secret-token' not in parsed.path
+    assert parse_qs(parsed.fragment)['token']==['secret-token']

@@ -47,7 +47,7 @@ def account_message(recipient, kind, token, origin):
     message["To"] = recipient
     message["Subject"] = subjects[kind]
     message.set_content(
-        f"Open this link within one hour:\n{origin.rstrip('/')}/?action={kind}&token={token}\n\nIf you did not request this, you can ignore this email."
+        f"Open this link within one hour:\n{origin.rstrip('/')}/#action={kind}&token={token}\n\nIf you did not request this, you can ignore this email."
     )
     return message
 
