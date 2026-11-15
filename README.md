@@ -50,6 +50,8 @@ New members see a profile-completion checklist before discovery. Each item opens
 
 **Activity** includes received and sent interest. Profile cards show whether the connection is mutual; you can reciprocate, open a chat, or remove your interest there. Removing mutual interest ends the connection and disables chat. Blocked and unverified members are hidden from these lists.
 
+Notifications have an **Unread only** filter and individual **Mark read** controls. Opening a notification marks that item read; message unread counts remain separate. Activity updates automatically, including a five-second polling fallback when sockets are unavailable. Older notification and visitor pages stay loaded as new events arrive.
+
 ```sh
 npm --prefix frontend ci
 npm --prefix frontend run build

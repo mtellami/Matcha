@@ -41,6 +41,8 @@ export type Notification = {
   id: number;
   actor: number;
   username: string;
+  first_name: string;
+  photo_id: number | null;
   kind: string;
   is_read: boolean;
   created_at: string;

@@ -726,18 +726,38 @@ def report(uid):
 @app.get("/api/v1/notifications")
 @auth
 def notifications():
+    unread = request.args.get("unread", "false")
+    if unread not in ("true", "false"):
+        fail("Unread filter must be true or false")
     with db() as conn:
         rows = conn.execute(
-            """SELECT n.*,u.username FROM notifications n JOIN users u ON u.id=n.actor
+            """SELECT n.*,u.username,u.first_name,
+         (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id
+         FROM notifications n JOIN users u ON u.id=n.actor
          WHERE n.target=%s AND NOT EXISTS(SELECT 1 FROM blocks b WHERE
          (b.actor=n.actor AND b.target=n.target) OR (b.target=n.actor AND b.actor=n.target))
          AND NOT EXISTS(SELECT 1 FROM muted_notifications m WHERE m.actor=n.actor AND m.target=n.target)
+         AND (NOT %s OR NOT n.is_read)
          AND n.id<%s ORDER BY n.id DESC LIMIT 51""",
-            (g.uid, cursor()),
+            (g.uid, unread == "true", cursor()),
         ).fetchall()
     return jsonify(
         notifications=rows[:50], next_before=rows[49]["id"] if len(rows) > 50 else None
     )
+
+
+@app.post("/api/v1/notifications/<int:notification_id>/read")
+@auth
+def read_notification(notification_id):
+    notification_id = cursor(notification_id)
+    with db() as conn:
+        updated = conn.execute(
+            "UPDATE notifications SET is_read=true WHERE id=%s AND target=%s RETURNING id",
+            (notification_id, g.uid),
+        ).fetchone()
+        if not updated:
+            fail("Notification unavailable", 404)
+    return {"message": "Notification marked read"}
 
 
 @app.post("/api/v1/notifications/read")
