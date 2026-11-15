@@ -86,7 +86,7 @@ def account_message(recipient, kind, token, origin):
       <tr><td align="center" style="padding:36px 16px;">
         <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #e3e8dd;border-radius:18px;overflow:hidden;">
           <tr><td style="padding:26px 36px;background:#ffffff;border-bottom:1px solid #e4e8df;">
-            <div style="font-size:28px;font-weight:800;letter-spacing:-1.5px;color:#243b30;">matcha <span style="color:#9cba80;">✳</span></div>
+            <div style="font-size:28px;font-weight:800;letter-spacing:-1.5px;color:#243b30;">matcha</div>
             <div style="margin-top:5px;font-size:12px;color:#7d857a;">A little curiosity. A real connection.</div>
           </td></tr>
           <tr><td style="padding:38px 36px 20px;">

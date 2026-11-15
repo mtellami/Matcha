@@ -73,7 +73,7 @@ export function Discovery({
           <p>A shared passion. A nearby coffee. A story waiting to happen.</p>
         </div>
         <div className="intro-note">
-          <span>✳</span>Less scrolling.
+          Less scrolling.
           <br />
           More butterflies.
         </div>

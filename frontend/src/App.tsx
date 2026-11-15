@@ -197,7 +197,7 @@ export default function App() {
       <header>
         <a className="brand" href="/">
           <Leaf size={28} />
-          matcha<span>✳</span>
+          matcha
         </a>
         {me && (
           <nav aria-label="Main navigation">
