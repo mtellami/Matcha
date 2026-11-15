@@ -23,7 +23,7 @@ from argon2.exceptions import VerificationError, InvalidHashError
 from flask import Flask, g, jsonify, request, send_file
 from flask_socketio import SocketIO, join_room, disconnect
 from http import HTTPStatus
-from PIL import Image, UnidentifiedImageError
+from images import encode_photo
 from psycopg import errors
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
@@ -49,7 +49,7 @@ pool = ConnectionPool(
 socketio = SocketIO(
     app,
     async_mode="threading",
-    cors_allowed_origins=[os.getenv("APP_ORIGIN", "http://localhost:5173")],
+    cors_allowed_origins=[os.getenv("APP_ORIGIN", "http://localhost:8080")],
 )
 ph = PasswordHasher()
 
@@ -388,38 +388,41 @@ def upload():
     file = request.files.get("photo")
     if not file:
         fail("Select an image", field="photo")
-    try:
-        Image.MAX_IMAGE_PIXELS = 20_000_000
-        image = Image.open(file.stream)
-        if image.format not in ("JPEG", "PNG", "WEBP"):
-            fail("Use JPEG, PNG, or WebP", field="photo")
-        if image.width * image.height > 20_000_000:
-            fail("Image must contain no more than 20 million pixels")
-        image.load()
-        image.thumbnail((1600, 1600))
-        output = BytesIO()
-        image.convert("RGB").save(output, "JPEG", quality=85)
-    except (
-        UnidentifiedImageError,
-        OSError,
-        Image.DecompressionBombError,
-        Image.DecompressionBombWarning,
-    ):
-        fail("Invalid image", field="photo")
+    return create_photo(g.uid, encode_photo(file.stream)), 201
+
+
+def create_photo(user_id, contents, only_if_empty=False):
+    # Reserve cleanup before touching S3. Rollback/crash after upload leaves a retryable cleanup entry.
     name = secrets.token_hex(24) + ".jpg"
     with db() as conn:
-        conn.execute("SELECT id FROM users WHERE id=%s FOR UPDATE", (g.uid,))
+        conn.execute(
+            "INSERT INTO photo_deletions(filename,ready_at) VALUES(%s,now()+interval '1 hour')",
+            (name,),
+        )
+    with db() as conn:
+        conn.execute("SELECT id FROM users WHERE id=%s FOR UPDATE", (user_id,))
         count = conn.execute(
-            "SELECT count(*) AS n FROM photos WHERE user_id=%s", (g.uid,)
+            "SELECT count(*) AS n FROM photos WHERE user_id=%s", (user_id,)
         ).fetchone()["n"]
+        if only_if_empty and count:
+            conn.execute("DELETE FROM photo_deletions WHERE filename=%s", (name,))
+            return None
         if count >= 5:
-            fail("Maximum five photos", field="photo")
-        storage.put_photo(name, output.getvalue())
-        photo = conn.execute(
-            "INSERT INTO photos(user_id,filename,is_primary) VALUES(%s,%s,%s) RETURNING id",
-            (g.uid, name, count == 0),
-        ).fetchone()
-    return photo, 201
+            conn.execute("DELETE FROM photo_deletions WHERE filename=%s", (name,))
+        else:
+            photo = conn.execute(
+                "INSERT INTO photos(user_id,filename,is_primary) VALUES(%s,%s,%s) RETURNING id",
+                (user_id, name, count == 0),
+            ).fetchone()
+            try:
+                storage.put_photo(name, contents)
+            except Exception as exc:
+                app.logger.warning("Photo upload unavailable (%s)", type(exc).__name__)
+                fail("Photo storage is temporarily unavailable. Please try again.", 503)
+            conn.execute("DELETE FROM photo_deletions WHERE filename=%s", (name,))
+    if count >= 5:
+        fail("Maximum five photos", field="photo")
+    return photo
 
 
 def blocked(conn, a, b):
@@ -778,7 +781,10 @@ def manage_photo(photo_id):
         if not photo:
             fail("Photo unavailable", 404)
         if request.method == "DELETE":
-            storage.delete_photo(photo["filename"])
+            conn.execute(
+                "INSERT INTO photo_deletions(filename) VALUES(%s) ON CONFLICT DO NOTHING",
+                (photo["filename"],),
+            )
             conn.execute("DELETE FROM photos WHERE id=%s", (photo_id,))
             if photo["is_primary"]:
                 conn.execute(
@@ -876,6 +882,33 @@ def deliver_pending_events():
             )
 
 
+def cleanup_pending_photos():
+    with db() as conn:
+        pending = conn.execute(
+            """SELECT d.filename FROM photo_deletions d WHERE d.ready_at<=now()
+            AND NOT EXISTS(SELECT 1 FROM photos p WHERE p.filename=d.filename)
+            ORDER BY d.ready_at LIMIT 20 FOR UPDATE OF d SKIP LOCKED"""
+        ).fetchall()
+        for photo in pending:
+            try:
+                storage.delete_photo(photo["filename"])
+            except Exception as exc:
+                app.logger.warning("Photo cleanup will retry (%s)", type(exc).__name__)
+                continue
+            conn.execute(
+                "DELETE FROM photo_deletions WHERE filename=%s", (photo["filename"],)
+            )
+
+
+def cleanup_photos():
+    while True:
+        try:
+            cleanup_pending_photos()
+        except Exception:
+            app.logger.exception("Photo cleanup will retry")
+        time.sleep(30)
+
+
 def deliver_events():
     while True:
         try:
@@ -890,7 +923,7 @@ def request_guards():
     global _delivery_started
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("Origin")
-        if origin and origin != os.getenv("APP_ORIGIN", "http://localhost:5173"):
+        if origin and origin != os.getenv("APP_ORIGIN", "http://localhost:8080"):
             fail("Untrusted origin", 403)
     if request.path.startswith("/api/v1/auth/") and request.method == "POST":
         key = request.remote_addr or "unknown"
@@ -907,6 +940,7 @@ def request_guards():
         with _delivery_lock:
             if not _delivery_started:
                 threading.Thread(target=deliver_events, daemon=True).start()
+                threading.Thread(target=cleanup_photos, daemon=True).start()
                 _delivery_started = True
 
 

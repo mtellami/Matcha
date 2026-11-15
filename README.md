@@ -95,3 +95,5 @@ Browser acceptance tests also cover a 120-message offline burst and socket-block
 Registration is committed before contacting SMTP, so a mail outage does not lose the account. Use **Resend verification email** on the sign-in screen if a link is missing or expired. Reset and resend requests use generic responses for unknown accounts. An email-change delivery failure keeps the current email active and can be retried.
 
 New account emails put the one-time token in the URL fragment, so the token is not sent in the page request or HTTP referrer. Existing query-string links remain accepted until they expire.
+
+Uploads are decoded, checked, resized, oriented, and re-encoded as JPEG with metadata removed. Removing a photo updates the profile transactionally; the backend retries physical S3 deletion separately if storage is unavailable. Uploads that fail to publish retain a cleanup reservation, so a database rollback does not leak an untracked object. No additional container or setup command is required.

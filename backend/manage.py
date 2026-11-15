@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 from PIL import Image, ImageDraw
 from argon2 import PasswordHasher
-from app import db
+from app import db, create_photo
 
 
 def migrate():
@@ -51,34 +51,26 @@ def seed():
                     ["coffee", "music" if i % 2 else "hiking"],
                 ),
             )
-    with db() as conn:
-        for i in range(1, 501):
+    for i in range(1, 501):
+        with db() as conn:
             user = conn.execute(
                 "SELECT id FROM users WHERE username=%s", (f"demo{i}",)
             ).fetchone()
-            if not conn.execute(
+            has_photo = conn.execute(
                 "SELECT 1 FROM photos WHERE user_id=%s", (user["id"],)
-            ).fetchone():
-                name = f"demo-{i}.jpg"
-                image = Image.new(
-                    "RGB",
-                    (600, 600),
-                    [
-                        (187, 206, 172),
-                        (225, 201, 171),
-                        (176, 204, 197),
-                        (202, 190, 211),
-                    ][i % 4],
-                )
-                draw = ImageDraw.Draw(image)
-                draw.text((220, 260), f"ALEX {i}", fill="#344b38", font_size=40)
-                output = BytesIO()
-                image.save(output, "JPEG")
-                storage.put_photo(name, output.getvalue())
-                conn.execute(
-                    "INSERT INTO photos(user_id,filename,is_primary) VALUES(%s,%s,true)",
-                    (user["id"], name),
-                )
+            ).fetchone()
+        if has_photo:
+            continue
+        image = Image.new(
+            "RGB",
+            (600, 600),
+            [(187, 206, 172), (225, 201, 171), (176, 204, 197), (202, 190, 211)][i % 4],
+        )
+        draw = ImageDraw.Draw(image)
+        draw.text((220, 260), f"ALEX {i}", fill="#344b38", font_size=40)
+        output = BytesIO()
+        image.save(output, "JPEG")
+        create_photo(user["id"], output.getvalue(), only_if_empty=True)
     print("Seeded 500 profiles. Login: demo1 / Demo!River8Cloud&2026")
 
 

@@ -52,6 +52,31 @@ BEGIN
 END
 $$;
 
+/* A publish rollback must leave the pre-existing cleanup reservation intact. */
+INSERT INTO photo_deletions(filename,ready_at) VALUES('sql-smoke-orphan.jpg',now());
+SAVEPOINT publish_photo;
+INSERT INTO photos(user_id,filename,is_primary) SELECT id,'sql-smoke-orphan.jpg',true FROM users WHERE username='sql_smoke_1';
+DELETE FROM photo_deletions WHERE filename='sql-smoke-orphan.jpg';
+ROLLBACK TO publish_photo;
+DO $$ BEGIN
+    ASSERT EXISTS(SELECT 1 FROM photo_deletions WHERE filename='sql-smoke-orphan.jpg'),'Upload rollback lost cleanup reservation';
+    ASSERT NOT EXISTS(SELECT 1 FROM photos WHERE filename='sql-smoke-orphan.jpg'),'Failed publish left a visible photo';
+END $$;
+
+/* Cleanup must skip objects still referenced by a profile. */
+INSERT INTO photos(user_id,filename,is_primary) SELECT id,'sql-smoke-live.jpg',true FROM users WHERE username='sql_smoke_1';
+INSERT INTO photo_deletions(filename) VALUES('sql-smoke-live.jpg');
+DO $$ BEGIN
+    ASSERT NOT EXISTS(SELECT 1 FROM photo_deletions d WHERE d.filename='sql-smoke-live.jpg' AND d.ready_at<=now()
+        AND NOT EXISTS(SELECT 1 FROM photos p WHERE p.filename=d.filename)),'Cleanup selected a live photo';
+END $$;
+SAVEPOINT remove_photo;
+DELETE FROM photos WHERE filename='sql-smoke-live.jpg';
+ROLLBACK TO remove_photo;
+DO $$ BEGIN
+    ASSERT EXISTS(SELECT 1 FROM photos WHERE filename='sql-smoke-live.jpg'),'Removal rollback lost profile metadata';
+END $$;
+
 EXPLAIN (ANALYZE,BUFFERS,TIMING OFF)
 SELECT u.id,u.username,u.first_name,u.last_name,u.birth_date,u.gender,u.bio,u.city,u.tags,u.latitude,u.longitude,
        (SELECT count(*) FROM likes WHERE target=u.id) AS likes,

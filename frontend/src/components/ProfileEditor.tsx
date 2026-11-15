@@ -354,9 +354,12 @@ export function ProfileEditor({
                 void run(async () => {
                   const form = new FormData();
                   form.append("photo", file);
-                  await api("/me/photos", "POST", form);
-                  input.value = "";
-                  await saved();
+                  try {
+                    await api("/me/photos", "POST", form);
+                    await saved();
+                  } finally {
+                    input.value = "";
+                  }
                 });
             }}
           />

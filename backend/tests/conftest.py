@@ -49,6 +49,14 @@ def accounts(client):
 
     yield users, sign_in
     with db() as conn:
+        names = [f"{suffix}-{number}.jpg" for number in range(3)]
+        names.extend(
+            row["filename"]
+            for row in conn.execute(
+                "SELECT filename FROM photos WHERE user_id=ANY(%s)", (users,)
+            ).fetchall()
+        )
+        conn.execute("DELETE FROM photo_deletions WHERE filename=ANY(%s)", (names,))
         for table, columns in [
             ("notifications", ("actor", "target")),
             ("messages", ("actor", "target")),
