@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Compass, Leaf, LogOut, MessageCircle, User } from "lucide-react";
 import { io } from "socket.io-client";
-import { startRealtime, type ConnectionState } from "../features/realtime/realtime";
-import { api, ApiError, setCsrf } from "../shared/api";
-import { Auth } from "../features/auth/Auth";
-import { Activity } from "../features/activity/Activity";
-import { Discovery } from "../features/discovery/Discovery";
-import { Inbox } from "../features/inbox/Inbox";
-import { ProfileDetail } from "../features/profile/ProfileDetail";
-import { ProfileEditor } from "../features/profile/ProfileEditor";
-import { ProfileCompletion } from "../features/profile/ProfileCompletion";
-import { canDiscover } from "../features/profile/profile-completion";
-import type { Me, Profile, Runner } from "../shared/types";
+import { startRealtime, type ConnectionState } from "./features/realtime/realtime";
+import { api, ApiError, setCsrf } from "./shared/api";
+import { Auth } from "./features/auth/Auth";
+import { Activity } from "./features/activity/Activity";
+import { Discovery } from "./features/discovery/Discovery";
+import { Inbox } from "./features/inbox/Inbox";
+import { ProfileDetail } from "./features/profile/ProfileDetail";
+import { ProfileEditor } from "./features/profile/ProfileEditor";
+import { ProfileCompletion } from "./features/profile/ProfileCompletion";
+import { canDiscover } from "./features/profile/profile-completion";
+import type { Me, Profile, Runner } from "./shared/types";
 
 type View = "discover" | "notifications" | "inbox" | "profile";
 type Summary = { notifications: number; messages: number };
