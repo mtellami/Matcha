@@ -4,7 +4,7 @@ import {
   startRealtime,
   type LiveSocket,
   type ConnectionState,
-} from "../src/realtime.ts";
+} from "../src/features/realtime/realtime.ts";
 
 type Listener = (...args: unknown[]) => void;
 class FakeSocket implements LiveSocket {

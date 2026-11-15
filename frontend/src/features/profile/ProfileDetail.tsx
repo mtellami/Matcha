@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Heart, Leaf, MessageCircle } from "lucide-react";
-import { api, ApiError } from "../api";
-import { messageUpdates, mergeMessages } from "../chat";
-import type { Message, Profile, Runner } from "../types";
+import { api, ApiError } from "../../shared/api";
+import { messageUpdates, mergeMessages } from "../chat/chat";
+import type { Message, Profile, Runner } from "../../shared/types";
 
 type Status = Pick<
   Profile,

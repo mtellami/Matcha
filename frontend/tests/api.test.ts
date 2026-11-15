@@ -1,6 +1,6 @@
 import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
-import { api, ApiError, setCsrf } from "../src/api.ts";
+import { api, ApiError, setCsrf } from "../src/shared/api.ts";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {

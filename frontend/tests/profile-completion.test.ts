@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canDiscover, profileSteps } from "../src/profile-completion.ts";
-import type { Me } from "../src/types.ts";
+import { canDiscover, profileSteps } from "../src/features/profile/profile-completion.ts";
+import type { Me } from "../src/shared/types.ts";
 
 const member: Me = {
   id: 1, username: "member", email: "member@example.test", first_name: "Alex", last_name: "Test",

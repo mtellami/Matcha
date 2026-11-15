@@ -1,5 +1,5 @@
 import { Heart, MessageCircle, User } from "lucide-react";
-import type { Interest, Runner } from "../types";
+import type { Interest, Runner } from "../../shared/types";
 
 export function InterestList({ items, sent, busy, run, openProfile, changeInterest }: {
   items: Interest[];

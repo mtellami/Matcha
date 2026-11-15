@@ -4,8 +4,8 @@ import {
   messageUpdates,
   mergeMessages,
   type MessagePage,
-} from "../src/chat.ts";
-import type { Message } from "../src/types.ts";
+} from "../src/features/chat/chat.ts";
+import type { Message } from "../src/shared/types.ts";
 
 const message = (id: number): Message => ({
   id,

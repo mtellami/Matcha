@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
-import { api } from "../api";
-import { nearbyCity, type Location } from "../location";
-import type { Me, Runner } from "../types";
+import { api } from "../../shared/api";
+import { nearbyCity, type Location } from "../location/location";
+import type { Me, Runner } from "../../shared/types";
 import { ProfileCompletion } from "./ProfileCompletion";
 
 export function ProfileEditor({

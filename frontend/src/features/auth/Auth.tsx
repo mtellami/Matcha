@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { ArrowUpRight, Leaf } from "lucide-react";
-import { api, setCsrf } from "../api";
-import type { Runner } from "../types";
+import { api, setCsrf } from "../../shared/api";
+import type { Runner } from "../../shared/types";
 
 export function Auth({
   fieldErrors,

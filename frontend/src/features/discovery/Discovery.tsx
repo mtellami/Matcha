@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowUpRight, Heart, Leaf } from "lucide-react";
-import { api } from "../api";
-import type { Profile, Runner } from "../types";
+import { api } from "../../shared/api";
+import type { Profile, Runner } from "../../shared/types";
 
 export function Discovery({
   openProfile,

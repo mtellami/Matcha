@@ -1,6 +1,6 @@
 import { ArrowUpRight, Check } from "lucide-react";
-import { profileSteps } from "../profile-completion";
-import type { Me } from "../types";
+import { profileSteps } from "./profile-completion";
+import type { Me } from "../../shared/types";
 
 export function ProfileCompletion({ me, edit, discover }: {
   me: Me;

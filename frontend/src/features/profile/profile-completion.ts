@@ -1,4 +1,4 @@
-import type { Me } from "./types";
+import type { Me } from "../../shared/types";
 
 export function profileSteps(me: Me) {
   return [

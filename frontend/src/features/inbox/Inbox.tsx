@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
-import { api } from "../api";
-import type { Conversation, Runner } from "../types";
+import { api } from "../../shared/api";
+import type { Conversation, Runner } from "../../shared/types";
 
 export function Inbox({
   revision,

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, Eye } from "lucide-react";
-import { api } from "../api";
-import { historyWindow } from "../activity";
-import type { Activity as ActivityData, Notification, Runner } from "../types";
+import { api } from "../../shared/api";
+import { historyWindow } from "./history";
+import type { Activity as ActivityData, Notification, Runner } from "../../shared/types";
 import { InterestList } from "./InterestList";
 import { NotificationList } from "./NotificationList";
 

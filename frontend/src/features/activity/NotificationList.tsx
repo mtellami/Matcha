@@ -1,5 +1,5 @@
 import { Eye, Heart, Link, MessageCircle, Unlink } from "lucide-react";
-import type { Notification, Runner } from "../types";
+import type { Notification, Runner } from "../../shared/types";
 
 const events: Record<string, { text: string; Icon: typeof Heart }> = {
   visit: { text: "viewed your profile", Icon: Eye },

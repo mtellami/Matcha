@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { historyWindow } from "../src/activity.ts";
+import { historyWindow } from "../src/features/activity/history.ts";
 
 const rows = (count: number) => Array.from({ length: count }, (_, i) => ({ id: count - i }));
 function history(items: { id: number }[], calls: (number | null)[]) {
