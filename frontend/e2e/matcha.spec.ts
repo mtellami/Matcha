@@ -71,8 +71,8 @@ test("search filters persist and the page fits the viewport", async ({
   await page.getByLabel("Minimum age", { exact: true }).fill("25");
   await page.getByLabel("Maximum age", { exact: true }).fill("40");
   await page.getByLabel("Interest tags", { exact: true }).fill("coffee");
-  await page.getByLabel("Sort by", { exact: true }).selectOption("fame");
-  await page.getByLabel("Order", { exact: true }).selectOption("desc");
+  await page.getByRole("combobox", { name: "Sort by", exact: true }).selectOption("fame");
+  await page.getByRole("combobox", { name: "Order", exact: true }).selectOption("desc");
   await page.getByRole("button", { name: "Find people", exact: true }).click();
   await expect(page).toHaveURL(/min_age=25/);
   await expect(page).toHaveURL(/direction=desc/);
@@ -111,6 +111,42 @@ test("profile validation rejects empty normalized tags and city selection needs 
   await expect(
     page.getByRole("button", { name: "Remove", exact: true }).first(),
   ).toBeVisible();
+});
+
+test("profile checklist guides a new member to missing fields", async ({ page }) => {
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    if (!response.ok()) return route.fulfill({ response });
+    const data = await response.json();
+    await route.fulfill({ response, json: { ...data, user: {
+      ...data.user, birth_date: null, gender: null, bio: "", tags: [],
+      city: null, latitude: null, longitude: null, photos: [],
+    } } });
+  });
+  await login(page);
+  await expect(page.getByRole("heading", { name: "Let’s start with you." })).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Saved profile completion" })).toHaveAttribute("value", "1");
+  await page.getByRole("button", { name: /A little about you/ }).click();
+  await expect(page.getByLabel("About you", { exact: true })).toBeFocused();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("public profile preview and reusable interest selection", async ({ page }) => {
+  await login(page);
+  await page.getByRole("button", { name: "My profile", exact: true }).click();
+  const hiking = page.getByRole("button", { name: "#hiking +", exact: true });
+  await hiking.click();
+  await expect(page.getByRole("button", { name: "#hiking ✓", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Interests, separated by commas", { exact: true })).toHaveValue(/hiking/);
+  await page.getByRole("button", { name: "#hiking ✓", exact: true }).click();
+  await expect(page.getByLabel("Interests, separated by commas", { exact: true })).not.toHaveValue(/hiking/);
+  await page.getByRole("button", { name: "Preview my public profile", exact: true }).click();
+  await expect(page.getByText(/Your public profile ·/)).toBeVisible();
+  await expect(page.getByText("Coffee, conversation, and discovering new places.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "I’m interested", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Block", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "← Back to editing", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Your photos", exact: true })).toBeVisible();
 });
 
 test("mutual interest enables chat and messages arrive within ten seconds", async ({

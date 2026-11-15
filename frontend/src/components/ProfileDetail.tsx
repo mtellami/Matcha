@@ -32,6 +32,7 @@ export function ProfileDetail({
     [unavailable, setUnavailable] = useState(false),
     [activePhoto, setActivePhoto] = useState(person.photos?.[0]?.id);
   const [draft, setDraft] = useState("");
+  const ownProfile = person.id === myId;
   const [bottomVisible, setBottomVisible] = useState(false);
   const bottom = useRef<HTMLDivElement>(null),
     messageKey = useRef<{ body: string; key: string } | null>(null);
@@ -64,6 +65,7 @@ export function ProfileDetail({
       .catch(() => {});
   }, [lastId, bottomVisible, profile.connected, person.id, changed, visible]);
   useEffect(() => {
+    if (ownProfile) return;
     let active = true,
       inFlight = false,
       queued = false;
@@ -137,7 +139,7 @@ export function ProfileDetail({
       clearInterval(timer);
       pollNow.current = async () => {};
     };
-  }, [person.id]);
+  }, [person.id, ownProfile]);
   useEffect(() => {
     void pollNow.current();
   }, [revision]);
@@ -172,8 +174,9 @@ export function ProfileDetail({
   return (
     <>
       <button className="back" onClick={back}>
-        ← Back
+        {ownProfile ? "← Back to editing" : "← Back"}
       </button>
+      {ownProfile && <p className="preview-note">Your public profile · This is what other members can see. Save changes in your profile editor before previewing.</p>}
       {error && (
         <p className="alert" role="alert">
           {error}
@@ -232,14 +235,14 @@ export function ProfileDetail({
                 <span key={tag}>#{tag}</span>
               ))}
             </div>
-            <p>
+            {!ownProfile && <p>
               {profile.connected
                 ? "You’re connected ✨"
                 : profile.likes_you
                   ? "They’re interested in you"
                   : ""}
-            </p>
-            <div className="actions">
+            </p>}
+            {!ownProfile && <div className="actions">
               <button
                 className="primary"
                 disabled={busy}
@@ -273,7 +276,7 @@ export function ProfileDetail({
               >
                 Report fake
               </button>
-            </div>
+            </div>}
             {profile.connected && (
               <section className="chat">
                 <h2>

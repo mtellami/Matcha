@@ -9,6 +9,8 @@ import { Discovery } from "./components/Discovery";
 import { Inbox } from "./components/Inbox";
 import { ProfileDetail } from "./components/ProfileDetail";
 import { ProfileEditor } from "./components/ProfileEditor";
+import { ProfileCompletion } from "./components/ProfileCompletion";
+import { canDiscover } from "./profile-completion";
 import type { Me, Profile, Runner } from "./types";
 
 type View = "discover" | "notifications" | "inbox" | "profile";
@@ -22,6 +24,7 @@ export default function App() {
     [pending, setPending] = useState(0),
     [selected, setSelected] = useState<Profile | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [profileFocus, setProfileFocus] = useState<{ field: string } | null>(null);
   const [summary, setSummary] = useState<Summary>({
     notifications: 0,
     messages: 0,
@@ -159,6 +162,10 @@ export default function App() {
     setFieldErrors({});
     setNotice("");
   }
+  function editProfile(field: string) {
+    navigate("profile");
+    setProfileFocus({ field });
+  }
   async function redeem() {
     history.replaceState({}, "", "/");
     setLink({ action: null, token: null });
@@ -295,6 +302,10 @@ export default function App() {
           />
         ) : view === "profile" ? (
           <ProfileEditor
+            focus={profileFocus}
+            edit={editProfile}
+            discover={() => navigate("discover")}
+            preview={() => void run(() => openProfile(me.id))}
             fieldErrors={fieldErrors}
             me={me}
             saved={loadMe}
@@ -311,6 +322,13 @@ export default function App() {
           />
         ) : view === "inbox" ? (
           <Inbox openProfile={openProfile} run={run} revision={revision} />
+        ) : !canDiscover(me) ? (
+          <>
+            <div className="eyebrow">WELCOME TO MATCHA</div>
+            <h1>Let’s start with <em>you.</em></h1>
+            <p>A little about yourself helps us find people you’ll want to meet.</p>
+            <ProfileCompletion me={me} edit={editProfile} />
+          </>
         ) : (
           <Discovery
             openProfile={openProfile}

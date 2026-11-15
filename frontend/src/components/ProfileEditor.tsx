@@ -3,6 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { api } from "../api";
 import { nearbyCity, type Location } from "../location";
 import type { Me, Runner } from "../types";
+import { ProfileCompletion } from "./ProfileCompletion";
 
 export function ProfileEditor({
   fieldErrors,
@@ -11,6 +12,10 @@ export function ProfileEditor({
   run,
   notify,
   busy,
+  focus,
+  edit,
+  discover,
+  preview,
 }: {
   fieldErrors: Record<string, string>;
   me: Me;
@@ -18,6 +23,10 @@ export function ProfileEditor({
   run: Runner;
   notify: (message: string) => void;
   busy: boolean;
+  focus: { field: string } | null;
+  edit: (field: string) => void;
+  discover: () => void;
+  preview: () => void;
 }) {
   const [coords, setCoords] = useState({
     latitude: me.latitude ?? 0,
@@ -31,6 +40,20 @@ export function ProfileEditor({
   );
   const [locationNote, setLocationNote] = useState("");
   const [knownTags, setKnownTags] = useState<string[]>([]);
+  const [tags, setTags] = useState(me.tags.join(", "));
+  const selectedTags = new Set(tags.split(",").map((tag) => tag.trim().replace(/^#/, "").toLowerCase()).filter(Boolean));
+  useEffect(() => {
+    if (!focus) return;
+    const target = document.getElementById(focus.field);
+    target?.focus();
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focus]);
+  function toggleTag(tag: string) {
+    const next = new Set(selectedTags);
+    if (next.has(tag)) next.delete(tag);
+    else if (next.size < 20) next.add(tag);
+    setTags([...next].join(", "));
+  }
   useEffect(() => {
     const controller = new AbortController();
     api<{ locations: Location[] }>(
@@ -84,6 +107,11 @@ export function ProfileEditor({
       <h1>
         Show up as <em>yourself.</em>
       </h1>
+      <div className="profile-tools">
+        <button type="button" disabled={busy} onClick={preview}>Preview my public profile</button>
+        <small>Preview shows your saved changes.</small>
+      </div>
+      <ProfileCompletion me={me} edit={edit} discover={discover} />
       <form
         className="panel profile-form"
         onSubmit={(event) => {
@@ -146,6 +174,7 @@ export function ProfileEditor({
           Date of birth
           <input
             name="birth_date"
+            id="profile-birth-date"
             aria-invalid={Boolean(fieldErrors.birth_date)}
             aria-describedby={
               fieldErrors.birth_date ? "form-errors" : undefined
@@ -164,6 +193,7 @@ export function ProfileEditor({
             Gender
             <select
               name="gender"
+              id="profile-gender"
               aria-invalid={Boolean(fieldErrors.gender)}
               aria-describedby={fieldErrors.gender ? "form-errors" : undefined}
               defaultValue={me.gender || ""}
@@ -181,6 +211,7 @@ export function ProfileEditor({
             Interested in
             <select
               name="preferences"
+              id="profile-preferences"
               aria-invalid={Boolean(fieldErrors.preferences)}
               aria-describedby={
                 fieldErrors.preferences ? "form-errors" : undefined
@@ -203,6 +234,7 @@ export function ProfileEditor({
           About you
           <textarea
             name="bio"
+            id="profile-bio"
             aria-invalid={Boolean(fieldErrors.bio)}
             aria-describedby={fieldErrors.bio ? "form-errors" : undefined}
             defaultValue={me.bio}
@@ -215,10 +247,12 @@ export function ProfileEditor({
           Interests, separated by commas
           <input
             name="tags"
+            id="profile-tags"
             aria-invalid={Boolean(fieldErrors.tags)}
             aria-describedby={fieldErrors.tags ? "form-errors" : undefined}
             list="interest-tags"
-            defaultValue={me.tags.join(",")}
+            value={tags}
+            onChange={(event) => setTags(event.target.value)}
             placeholder="coffee, music, hiking"
             required
           />
@@ -228,6 +262,16 @@ export function ProfileEditor({
             <option key={tag} value={tag} />
           ))}
         </datalist>
+        <div className="interest-picker" role="group" aria-label="Choose reusable interests">
+          <p>Pick shared interests, or type your own above. {selectedTags.size}/20 selected.</p>
+          <div className="interest-options">
+            {[...new Set([...selectedTags, ...knownTags])].map((tag) => (
+              <button type="button" key={tag} aria-pressed={selectedTags.has(tag)}
+                disabled={!selectedTags.has(tag) && selectedTags.size >= 20}
+                onClick={() => toggleTag(tag)}>#{tag}{selectedTags.has(tag) ? " ✓" : " +"}</button>
+            ))}
+          </div>
+        </div>
         <fieldset>
           <legend>Your approximate location</legend>
           <p>Choose a city, or use GPS to set your approximate location.</p>
@@ -235,6 +279,7 @@ export function ProfileEditor({
             City or neighborhood
             <input
               name="city"
+              id="profile-city"
               value={city}
               list="cities"
               required
@@ -299,8 +344,8 @@ export function ProfileEditor({
           Save profile <ArrowUpRight size={18} />
         </button>
       </form>
-      <section className="panel profile-form">
-        <h2>Your photos</h2>
+      <section className="panel profile-form" id="profile-photos" tabIndex={-1} aria-labelledby="photos-heading">
+        <h2 id="photos-heading">Your photos</h2>
         <p>Up to five photos. Choose the picture people see first.</p>
         <div className="photo-row">
           {me.photos.map((photo) => (
