@@ -33,12 +33,15 @@ export function ProfileDetail({
     [activePhoto, setActivePhoto] = useState(person.photos?.[0]?.id);
   const [draft, setDraft] = useState("");
   const ownProfile = person.id === myId;
-  const [bottomVisible, setBottomVisible] = useState(false);
+  const [visibleMessage, setVisibleMessage] = useState<number | null>(null);
   const bottom = useRef<HTMLDivElement>(null),
+    readMarker = useRef<HTMLElement>(null),
     messageKey = useRef<{ body: string; key: string } | null>(null);
   const lastId = messages.at(-1)?.id;
+  const bottomVisible = lastId !== undefined && visibleMessage === lastId;
   const historyInitialized = useRef(false);
   const latestCursor = useRef<number | null>(null);
+  const acknowledgedThrough = useRef<number | null>(null);
   const pollNow = useRef<() => Promise<void>>(async () => {});
   const atBottom = useRef(false);
   atBottom.current = bottomVisible;
@@ -51,18 +54,35 @@ export function ProfileDetail({
     return () => document.removeEventListener("visibilitychange", update);
   }, []);
   useEffect(() => {
-    if (!bottom.current) return;
+    if (!readMarker.current || !lastId) return;
     const observer = new IntersectionObserver((entries) =>
-      setBottomVisible(entries[0].isIntersecting),
+      setVisibleMessage(entries[0].isIntersecting && entries[0].intersectionRatio >= 1 ? lastId : null),
+      { threshold: 1 },
     );
-    observer.observe(bottom.current);
+    observer.observe(readMarker.current);
     return () => observer.disconnect();
-  }, [profile.connected]);
+  }, [profile.connected, lastId]);
   useEffect(() => {
     if (!lastId || !bottomVisible || !profile.connected || !visible) return;
-    void api(`/conversations/${person.id}/read`, "POST", { through_id: lastId })
-      .then(changed)
-      .catch(() => {});
+    let active = true, inFlight = false;
+    async function acknowledge() {
+      if (inFlight || acknowledgedThrough.current === lastId) return;
+      inFlight = true;
+      try {
+        await api(`/conversations/${person.id}/read`, "POST", { through_id: lastId }, undefined, 4000);
+        if (active) {
+          acknowledgedThrough.current = lastId ?? null;
+          await changed();
+        }
+      } catch {
+        // Retry while the last message is still visible after a transient failure.
+      } finally {
+        inFlight = false;
+      }
+    }
+    void acknowledge();
+    const timer = setInterval(acknowledge, 5000);
+    return () => { active = false; clearInterval(timer); };
   }, [lastId, bottomVisible, profile.connected, person.id, changed, visible]);
   useEffect(() => {
     if (ownProfile) return;
@@ -82,6 +102,7 @@ export function ProfileDetail({
           "GET",
           undefined,
           controller.signal,
+          4000,
         );
         if (!active) return;
         setProfile((current) => ({ ...current, ...status }));
@@ -144,8 +165,8 @@ export function ProfileDetail({
     void pollNow.current();
   }, [revision]);
   async function relationship() {
-    await api(`/profiles/${person.id}/like`, profile.liked ? "DELETE" : "POST");
-    const status = await api<Status>(`/profiles/${person.id}/status`);
+    await api(`/profiles/${person.id}/like`, profile.liked ? "DELETE" : "POST", undefined, undefined, 8000);
+    const status = await api<Status>(`/profiles/${person.id}/status`, "GET", undefined, undefined, 4000);
     setProfile((current) => ({ ...current, ...status }));
     await changed();
   }
@@ -157,7 +178,7 @@ export function ProfileDetail({
     await api(`/conversations/${person.id}/messages`, "POST", {
       body,
       client_id: messageKey.current.key,
-    });
+    }, undefined, 8000);
     setDraft("");
     messageKey.current = null;
     await pollNow.current();
@@ -292,6 +313,7 @@ export function ProfileDetail({
                           next_before: number | null;
                         }>(
                           `/conversations/${person.id}/messages?before=${next}`,
+                          "GET", undefined, undefined, 4000,
                         );
                         setMessages((items) =>
                           mergeMessages(items, response.messages),
@@ -308,9 +330,10 @@ export function ProfileDetail({
                     <div
                       className={message.actor === myId ? "sent" : "received"}
                       key={message.id}
+                      data-message-id={message.id}
                     >
                       {message.body}
-                      <small>
+                      <small ref={message.id === lastId ? readMarker : undefined}>
                         {new Date(message.created_at).toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",

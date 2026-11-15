@@ -88,13 +88,15 @@ npx playwright install chromium firefox
 npm run test:e2e
 ```
 
-The scenarios run on Chromium, Firefox, and a mobile viewport. They use the synthetic `demo1`/`demo2` accounts, exercise real chat, and leave test messages in the development database. They restore likes they added. Do not run them against production. Set `PLAYWRIGHT_BASE_URL` if the development app uses a different URL.
+The scenarios run on Chromium, installed Google Chrome (`channel: chrome`), Firefox, and a mobile viewport. Install Google Chrome separately for the `chrome` project, or select the other projects explicitly. They use the synthetic `demo1`/`demo2` accounts, exercise real chat, and leave test messages in the development database. They restore the original interest state after chat scenarios. Valid demo sessions are reused within a test worker to respect authentication throttling; logout still revokes them normally. Do not run them against production. Set `PLAYWRIGHT_BASE_URL` if the development app uses a different URL.
 
 ## Live updates and recovery
 
 The browser uses the existing Socket.IO endpoint for update hints and refreshes authenticated data on connection/reconnection. Five-second HTTP polling continues if sockets are unavailable. Session heartbeats close expired sockets; logout disconnects the local client.
 
 Chat catches up with `GET /api/v1/conversations/{id}/messages?after={last_id}` in ascending pages. The existing `before` cursor still loads older history. This prevents a burst of more than 50 messages from being skipped after a disconnection. Sending retries reuse the message key and overlapping responses are deduplicated by message ID.
+
+Chat reads have a four-second timeout and sends have an eight-second timeout, so stalled requests release the refresh loop and leave failed sends available to retry. Read acknowledgements depend on the final message’s timestamp being visible in the active tab; failed acknowledgements retry while it remains visible.
 
 Browser acceptance tests also cover a 120-message offline burst and socket-blocked polling fallback. The standalone SQL smoke file can be run against a migrated disposable database with `psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/tests/sql_smoke.sql`. It inserts 500 synthetic profiles and rolls them back after assertions and an EXPLAIN check.
 

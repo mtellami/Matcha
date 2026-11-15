@@ -8,7 +8,7 @@ export type MessagePage = {
 };
 type ReadPage = (path: string, signal?: AbortSignal) => Promise<MessagePage>;
 const readPage: ReadPage = (path, signal) =>
-  api<MessagePage>(path, "GET", undefined, signal);
+  api<MessagePage>(path, "GET", undefined, signal, 4000);
 
 export function mergeMessages(
   existing: Message[],

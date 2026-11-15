@@ -240,7 +240,7 @@ export default function App() {
           )}
         </div>
       </header>
-      <main>
+      <main data-connection-state={me ? connection : undefined}>
         {me && connection === "reconnecting" && (
           <p className="connection-note" role="status">
             Reconnecting… You can keep browsing.

@@ -10,6 +10,7 @@ export default defineConfig({
   expect: { timeout: 10000 },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "chrome", use: { ...devices["Desktop Chrome"], channel: "chrome" } },
     { name: "firefox", use: { ...devices["Desktop Firefox"] } },
     { name: "mobile", use: { ...devices["Pixel 5"] } },
   ],

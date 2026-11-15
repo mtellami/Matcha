@@ -20,40 +20,49 @@ export async function api<T = { message: string }>(
   method = "GET",
   body?: unknown,
   signal?: AbortSignal,
+  timeoutMs?: number,
 ): Promise<T> {
-  const form = body instanceof FormData;
-  const response = await fetch("/api/v1" + path, {
-    method,
-    credentials: "same-origin",
-    signal,
-    headers: {
-      ...(!form && body !== undefined
-        ? { "Content-Type": "application/json" }
-        : {}),
-      "X-CSRF-Token": csrf,
-    },
-    body: body === undefined ? undefined : form ? body : JSON.stringify(body),
-  });
-  const data = await response.json().catch(() => null);
-  if (!response.ok)
-    throw new ApiError(
-      data?.error?.message || `Request failed (${response.status})`,
-      response.status,
-      data?.error?.fields &&
-      typeof data.error.fields === "object" &&
-      !Array.isArray(data.error.fields)
-        ? Object.fromEntries(
-            Object.entries(data.error.fields).filter(
-              (entry): entry is [string, string] =>
-                typeof entry[1] === "string",
-            ),
-          )
-        : {},
-    );
-  if (data === null)
-    throw new ApiError(
-      "The server returned an unexpected response",
-      response.status,
-    );
-  return data as T;
+  const timeout = timeoutMs === undefined ? undefined : AbortSignal.timeout(timeoutMs);
+  const requestSignal = timeout ? (signal ? AbortSignal.any([signal, timeout]) : timeout) : signal;
+  try {
+    const form = body instanceof FormData;
+    const response = await fetch("/api/v1" + path, {
+      method,
+      credentials: "same-origin",
+      signal: requestSignal,
+      headers: {
+        ...(!form && body !== undefined
+          ? { "Content-Type": "application/json" }
+          : {}),
+        "X-CSRF-Token": csrf,
+      },
+      body: body === undefined ? undefined : form ? body : JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok)
+      throw new ApiError(
+        data?.error?.message || `Request failed (${response.status})`,
+        response.status,
+        data?.error?.fields &&
+        typeof data.error.fields === "object" &&
+        !Array.isArray(data.error.fields)
+          ? Object.fromEntries(
+              Object.entries(data.error.fields).filter(
+                (entry): entry is [string, string] =>
+                  typeof entry[1] === "string",
+              ),
+            )
+          : {},
+      );
+    if (data === null)
+      throw new ApiError(
+        "The server returned an unexpected response",
+        response.status,
+      );
+    return data as T;
+  } catch (error) {
+    if (timeout?.aborted && !signal?.aborted)
+      throw new ApiError("The request timed out. Please try again.", 408);
+    throw error;
+  }
 }

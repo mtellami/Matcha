@@ -1,18 +1,8 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
-
-async function login(page: Page) {
-  await page.goto("/");
-  await page.getByLabel("Username", { exact: true }).fill("demo1");
-  await page.getByLabel("Password", { exact: true }).fill("Demo!River8Cloud&2026");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
-}
+import { login, loginByApi } from "./helpers/auth";
 
 async function prepare(a: BrowserContext, b: BrowserContext) {
-  const signedIn = await b.request.post("/api/v1/auth/login", {
-    data: { username: "demo2", password: "Demo!River8Cloud&2026" },
-  });
-  expect(signedIn.ok()).toBeTruthy();
+  await loginByApi(b, "demo2");
   const memberA = await (await a.request.get("/api/v1/me")).json();
   const memberB = await (await b.request.get("/api/v1/me")).json();
   const beforeA = await (await a.request.get(`/api/v1/profiles/${memberB.user.id}`)).json();

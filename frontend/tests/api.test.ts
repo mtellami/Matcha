@@ -97,3 +97,27 @@ test("field errors survive API parsing for accessible form feedback", async () =
       !("invalid" in error.fields),
   );
 });
+
+test("a stalled chat request times out instead of preventing future refreshes", async () => {
+  globalThis.fetch = async (_, options) => new Promise<Response>((_, reject) => {
+    const deadline = setTimeout(() => reject(new Error("Request was never aborted")), 1000);
+    options!.signal!.addEventListener("abort", () => {
+      clearTimeout(deadline);
+      reject(options!.signal!.reason);
+    }, { once: true });
+  });
+  await assert.rejects(api("/conversations/42/messages", "GET", undefined, undefined, 5),
+    (error) => error instanceof ApiError && error.status === 408 && error.message.includes("timed out"));
+  globalThis.fetch = async () => Response.json({ messages: [] });
+  assert.deepEqual(await api("/conversations/42/messages", "GET", undefined, undefined, 100), { messages: [] });
+});
+
+test("caller cancellation is preserved when a request also has a timeout", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  globalThis.fetch = async (_, options) => {
+    assert.ok(options?.signal?.aborted);
+    throw options!.signal!.reason;
+  };
+  await assert.rejects(api("/conversations/42/messages", "GET", undefined, controller.signal, 1000), { name: "AbortError" });
+});
