@@ -8,76 +8,159 @@ import storage
 
 @pytest.fixture
 def s3(monkeypatch):
-    fake=MagicMock()
-    monkeypatch.setattr(storage,'client',lambda:fake)
-    monkeypatch.setenv('S3_BUCKET','private-photos')
+    fake = MagicMock()
+    monkeypatch.setattr(storage, "client", lambda: fake)
+    monkeypatch.setenv("S3_BUCKET", "private-photos")
     return fake
 
 
 def test_photo_lifecycle_uses_same_bucket_and_object_key(s3):
-    storage.put_photo('image.jpg',b'jpeg bytes')
-    s3.put_object.assert_called_once_with(Bucket='private-photos',Key='image.jpg',Body=b'jpeg bytes',ContentType='image/jpeg')
-    body=BytesIO(b'jpeg bytes'); s3.get_object.return_value={'Body':body}
-    assert storage.get_photo('image.jpg')==b'jpeg bytes'
+    storage.put_photo("image.jpg", b"jpeg bytes")
+    s3.put_object.assert_called_once_with(
+        Bucket="private-photos",
+        Key="image.jpg",
+        Body=b"jpeg bytes",
+        ContentType="image/jpeg",
+    )
+    body = BytesIO(b"jpeg bytes")
+    s3.get_object.return_value = {"Body": body}
+    assert storage.get_photo("image.jpg") == b"jpeg bytes"
     assert body.closed
-    s3.get_object.assert_called_once_with(Bucket='private-photos',Key='image.jpg')
-    storage.delete_photo('image.jpg')
-    s3.delete_object.assert_called_once_with(Bucket='private-photos',Key='image.jpg')
+    s3.get_object.assert_called_once_with(Bucket="private-photos", Key="image.jpg")
+    storage.delete_photo("image.jpg")
+    s3.delete_object.assert_called_once_with(Bucket="private-photos", Key="image.jpg")
 
 
 def test_storage_failure_propagates(s3):
-    s3.put_object.side_effect=OSError('unavailable')
-    with pytest.raises(OSError):storage.put_photo('image.jpg',b'data')
+    s3.put_object.side_effect = OSError("unavailable")
+    with pytest.raises(OSError):
+        storage.put_photo("image.jpg", b"data")
 
 
 @pytest.fixture
 def smtp(monkeypatch):
-    for key in ('SMTP_HOST','SMTP_PORT','SMTP_USERNAME','SMTP_PASSWORD','SMTP_SECURITY'):
-        monkeypatch.delenv(key,raising=False)
-    monkeypatch.setenv('SMTP_HOST','smtp.example.test')
-    plain=MagicMock(); secure=MagicMock()
-    monkeypatch.setattr(mailer.smtplib,'SMTP',plain)
-    monkeypatch.setattr(mailer.smtplib,'SMTP_SSL',secure)
-    return plain,secure
+    for key in (
+        "SMTP_HOST",
+        "SMTP_PORT",
+        "SMTP_USERNAME",
+        "SMTP_PASSWORD",
+        "SMTP_SECURITY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.test")
+    plain = MagicMock()
+    secure = MagicMock()
+    monkeypatch.setattr(mailer.smtplib, "SMTP", plain)
+    monkeypatch.setattr(mailer.smtplib, "SMTP_SSL", secure)
+    return plain, secure
 
 
-def test_real_smtp_upgrades_before_authentication(smtp,monkeypatch):
-    plain,secure=smtp
-    monkeypatch.setenv('SMTP_USERNAME','user');monkeypatch.setenv('SMTP_PASSWORD','secret')
-    message=EmailMessage();mailer.send_message(message)
-    plain.assert_called_once_with(host='smtp.example.test',port=587,timeout=15)
-    conn=plain.return_value.__enter__.return_value
-    assert [call[0] for call in conn.mock_calls]==['ehlo','starttls','ehlo','login','send_message']
-    assert conn.starttls.call_args.kwargs['context'].check_hostname
+def test_real_smtp_upgrades_before_authentication(smtp, monkeypatch):
+    plain, secure = smtp
+    monkeypatch.setenv("SMTP_USERNAME", "user")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    message = EmailMessage()
+    mailer.send_message(message)
+    plain.assert_called_once_with(host="smtp.example.test", port=587, timeout=15)
+    conn = plain.return_value.__enter__.return_value
+    assert [call[0] for call in conn.mock_calls] == [
+        "ehlo",
+        "starttls",
+        "ehlo",
+        "login",
+        "send_message",
+    ]
+    assert conn.starttls.call_args.kwargs["context"].check_hostname
     secure.assert_not_called()
 
 
-def test_implicit_tls_uses_ssl_transport(smtp,monkeypatch):
-    monkeypatch.setenv('SMTP_SECURITY','ssl')
+def test_implicit_tls_uses_ssl_transport(smtp, monkeypatch):
+    monkeypatch.setenv("SMTP_SECURITY", "ssl")
     mailer.send_message(EmailMessage())
-    plain,secure=smtp
+    plain, secure = smtp
     plain.assert_not_called()
-    assert secure.call_args.kwargs['port']==465
+    assert secure.call_args.kwargs["port"] == 465
     secure.return_value.__enter__.return_value.starttls.assert_not_called()
 
 
-def test_mailpit_without_tls_or_auth(smtp,monkeypatch):
-    monkeypatch.setenv('SMTP_SECURITY','none');monkeypatch.setenv('SMTP_PORT','1025')
+def test_mailpit_without_tls_or_auth(smtp, monkeypatch):
+    monkeypatch.setenv("SMTP_SECURITY", "none")
+    monkeypatch.setenv("SMTP_PORT", "1025")
     mailer.send_message(EmailMessage())
-    conn=smtp[0].return_value.__enter__.return_value
-    conn.starttls.assert_not_called();conn.login.assert_not_called();conn.send_message.assert_called_once()
+    conn = smtp[0].return_value.__enter__.return_value
+    conn.starttls.assert_not_called()
+    conn.login.assert_not_called()
+    conn.send_message.assert_called_once()
 
 
-@pytest.mark.parametrize('mode,user,password',[('invalid','',''),('none','user','secret'),('ssl','user','')])
-def test_invalid_mail_configuration_fails_before_connecting(smtp,monkeypatch,mode,user,password):
-    monkeypatch.setenv('SMTP_SECURITY',mode);monkeypatch.setenv('SMTP_USERNAME',user);monkeypatch.setenv('SMTP_PASSWORD',password)
-    with pytest.raises(ValueError):mailer.send_message(EmailMessage())
-    smtp[0].assert_not_called();smtp[1].assert_not_called()
+@pytest.mark.parametrize(
+    "mode,user,password",
+    [("invalid", "", ""), ("none", "user", "secret"), ("ssl", "user", "")],
+)
+def test_invalid_mail_configuration_fails_before_connecting(
+    smtp, monkeypatch, mode, user, password
+):
+    monkeypatch.setenv("SMTP_SECURITY", mode)
+    monkeypatch.setenv("SMTP_USERNAME", user)
+    monkeypatch.setenv("SMTP_PASSWORD", password)
+    with pytest.raises(ValueError):
+        mailer.send_message(EmailMessage())
+    smtp[0].assert_not_called()
+    smtp[1].assert_not_called()
 
 
-def test_starttls_failure_does_not_fall_back(smtp,monkeypatch):
-    monkeypatch.setenv('SMTP_USERNAME','user');monkeypatch.setenv('SMTP_PASSWORD','secret')
-    conn=smtp[0].return_value.__enter__.return_value
-    conn.starttls.side_effect=mailer.smtplib.SMTPException('TLS unavailable')
-    with pytest.raises(mailer.smtplib.SMTPException):mailer.send_message(EmailMessage())
-    conn.login.assert_not_called();conn.send_message.assert_not_called()
+def test_starttls_failure_does_not_fall_back(smtp, monkeypatch):
+    monkeypatch.setenv("SMTP_USERNAME", "user")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    conn = smtp[0].return_value.__enter__.return_value
+    conn.starttls.side_effect = mailer.smtplib.SMTPException("TLS unavailable")
+    with pytest.raises(mailer.smtplib.SMTPException):
+        mailer.send_message(EmailMessage())
+    conn.login.assert_not_called()
+    conn.send_message.assert_not_called()
+
+
+@pytest.mark.parametrize("kind", ["verify", "reset", "email"])
+def test_account_messages_have_single_use_links_and_no_passwords(kind, monkeypatch):
+    monkeypatch.setenv("MAIL_FROM", "hello@example.test")
+    message = mailer.account_message(
+        "member@example.test", kind, "opaque-token", "https://matcha.example/"
+    )
+    assert (
+        message["To"] == "member@example.test"
+        and message["From"] == "hello@example.test"
+    )
+    assert (
+        f"https://matcha.example/?action={kind}&token=opaque-token"
+        in message.get_content()
+    )
+    assert "one hour" in message.get_content()
+
+
+def test_delivery_failure_does_not_log_the_link_or_recipient(monkeypatch, caplog):
+    message = mailer.account_message(
+        "private@example.test", "reset", "private-token", "https://matcha.example"
+    )
+
+    def failed(_):
+        raise mailer.smtplib.SMTPException(
+            "private-token private@example.test password"
+        )
+
+    monkeypatch.setattr(mailer, "send_message", failed)
+    assert mailer.deliver_account_message(message) is False
+    assert "SMTPException" in caplog.text
+    assert (
+        "private-token" not in caplog.text
+        and "private@example.test" not in caplog.text
+        and "password" not in caplog.text
+    )
+
+
+def test_successful_delivery_is_reported(monkeypatch):
+    sent = []
+    monkeypatch.setattr(mailer, "send_message", lambda message: sent.append(message))
+    message = mailer.account_message(
+        "member@example.test", "verify", "token", "https://matcha.example"
+    )
+    assert mailer.deliver_account_message(message) is True and sent == [message]

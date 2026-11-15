@@ -45,7 +45,11 @@ export function Auth({
         await onLogin();
       } else {
         const result = await api(
-          mode === "reset" ? "/auth/reset-request" : "/auth/register",
+          mode === "reset"
+            ? "/auth/reset-request"
+            : mode === "verify"
+              ? "/auth/verification-request"
+              : "/auth/register",
           "POST",
           fields,
         );
@@ -89,7 +93,9 @@ export function Auth({
                   ? "Make yourself at home"
                   : mode === "reset"
                     ? "Let’s get you back in"
-                    : "Welcome back"}
+                    : mode === "verify"
+                      ? "Resend verification email"
+                      : "Welcome back"}
         </h2>
         {!action && mode === "register" && (
           <>
@@ -121,7 +127,7 @@ export function Auth({
             </label>
           </>
         )}
-        {!action && mode !== "reset" && (
+        {!action && (mode === "login" || mode === "register") && (
           <label>
             Username
             <input
@@ -149,7 +155,8 @@ export function Auth({
             />
           </label>
         )}
-        {(action === "reset" || (!action && mode !== "reset")) && (
+        {(action === "reset" ||
+          (!action && (mode === "login" || mode === "register"))) && (
           <label>
             Password
             <input
@@ -177,7 +184,9 @@ export function Auth({
               ? "Sign in"
               : mode === "reset"
                 ? "Send reset link"
-                : "Create account"}
+                : mode === "verify"
+                  ? "Send verification link"
+                  : "Create account"}
           <ArrowUpRight size={18} />
         </button>
         {action && (
@@ -203,6 +212,9 @@ export function Auth({
             </button>
             <button type="button" onClick={() => setMode("reset")}>
               Forgot password?
+            </button>
+            <button type="button" onClick={() => setMode("verify")}>
+              Resend verification email
             </button>
           </div>
         )}

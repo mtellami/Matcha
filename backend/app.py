@@ -5,12 +5,11 @@ import secrets
 import threading
 import time
 from datetime import date
-from email.message import EmailMessage
 from functools import wraps
 from io import BytesIO
 
 import storage
-from mailer import send_message
+from mailer import account_message, deliver_account_message
 from domain import (
     age_on,
     fame_rating,
@@ -176,14 +175,9 @@ def email_token(conn, user, kind):
         "INSERT INTO tokens(token,user_id,kind,expires_at) VALUES(%s,%s,%s,now()+interval '1 hour')",
         (digest(token), user["id"], kind),
     )
-    message = EmailMessage()
-    message["From"] = os.getenv("MAIL_FROM", "hello@matcha.local")
-    message["To"] = user["email"]
-    message["Subject"] = f"Matcha: {kind} your account"
-    message.set_content(
-        f"Open {os.getenv('APP_ORIGIN','http://localhost:5173')}/?action={kind}&token={token}"
+    return account_message(
+        user["email"], kind, token, os.getenv("APP_ORIGIN", "http://localhost:8080")
     )
-    send_message(message)
 
 
 @app.get("/api/v1/health")
@@ -224,8 +218,16 @@ def register():
                 hashed,
             ),
         ).fetchone()
-        email_token(conn, user, "verify")
-    return {"message": "Check your email to verify your account"}, 201
+        message = email_token(conn, user, "verify")
+    sent = deliver_account_message(message)
+    return {
+        "message": (
+            "Check your email to verify your account"
+            if sent
+            else "Account created. Email is temporarily unavailable; use Resend verification email to try again."
+        ),
+        "verification_sent": sent,
+    }, 201
 
 
 @app.post("/api/v1/auth/login")
@@ -279,9 +281,12 @@ def reset_request():
             "SELECT * FROM users WHERE email=%s",
             (text(d.get("email"), "Email", 254).lower(),),
         ).fetchone()
-        if user:
-            email_token(conn, user, "reset")
-    return {"message": "If the account exists, a reset link has been sent"}
+        message = email_token(conn, user, "reset") if user else None
+    if message:
+        deliver_account_message(message)
+    return {
+        "message": "If the account exists, check your inbox for a reset link. You can request another link if it does not arrive."
+    }
 
 
 @app.post("/api/v1/auth/token")
@@ -824,10 +829,15 @@ def change_email():
     with db() as conn:
         if conn.execute("SELECT 1 FROM users WHERE email=%s", (new,)).fetchone():
             fail("Email unavailable", 409, field="email")
-        email_token(conn, {"id": g.uid, "email": new}, "email")
+        message = email_token(conn, {"id": g.uid, "email": new}, "email")
         conn.execute(
             "UPDATE tokens SET pending_email=%s WHERE user_id=%s AND kind='email'",
             (new, g.uid),
+        )
+    if not deliver_account_message(message):
+        fail(
+            "Email is temporarily unavailable. Your current address is unchanged; try again shortly.",
+            503,
         )
     return {"message": "Check your new email to confirm the change"}
 
@@ -1054,3 +1064,20 @@ def locations():
             if not query or query in (place["city"] + " " + place["country"]).casefold()
         ]
     )
+
+
+@app.post("/api/v1/auth/verification-request")
+def verification_request():
+    email = text(data().get("email"), "Email", 254).lower()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        fail("Enter a valid email", field="email")
+    with db() as conn:
+        user = conn.execute(
+            "SELECT * FROM users WHERE email=%s AND NOT verified", (email,)
+        ).fetchone()
+        message = email_token(conn, user, "verify") if user else None
+    if message:
+        deliver_account_message(message)
+    return {
+        "message": "If your account needs verification, check your inbox for a new link. You can try again if it does not arrive."
+    }
