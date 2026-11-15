@@ -17,17 +17,12 @@ async function openPerson(
   await page.getByRole("button", { name: "Find people", exact: true }).click();
   const escaped = person.first_name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   await expect(page.getByRole("button", { name: "Find people", exact: true })).toBeEnabled();
-  const card = page
-    .locator(".card")
-    .filter({
-      has: page.getByRole("heading", {
-        level: 3,
-        name: new RegExp("^" + escaped + ","),
-      }),
-    });
+  const card = page.getByRole("button", {
+    name: new RegExp(`^View ${escaped},`),
+  });
   // Distance and fame can place the seeded chat partner beyond the first page.
   while (!(await card.count())) {
-    const next = page.getByRole("button", { name: "Next", exact: true });
+    const next = page.getByRole("button", { name: "Next results page", exact: true });
     if (!(await next.count()) || !(await next.isEnabled()))
       throw new Error(`No discoverable profile found for ${person.first_name} in ${person.city}`);
     await Promise.all([
@@ -78,7 +73,7 @@ test("search filters persist and the page fits the viewport", async ({
   await page.getByRole("button", { name: "Find people", exact: true }).click();
   await expect(page).toHaveURL(/min_age=25/);
   await expect(page).toHaveURL(/direction=desc/);
-  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText(/\d+ profiles found/);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -111,7 +106,7 @@ test("profile validation rejects empty normalized tags and city selection needs 
   ).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByLabel("Latitude", { exact: true })).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Remove", exact: true }).first(),
+    page.getByRole("button", { name: /^Remove photo \d+$/ }).first(),
   ).toBeVisible();
 });
 
@@ -191,16 +186,22 @@ test("mutual interest enables chat and messages arrive within ten seconds", asyn
         headers: { "X-CSRF-Token": accountB.csrf },
       });
     };
+    // Start from a known state even if a prior interrupted browser run left a match.
+    await a.request.delete(`/api/v1/profiles/${accountB.user.id}/like`, {
+      headers: { "X-CSRF-Token": accountA.csrf },
+    });
+    await b.request.delete(`/api/v1/profiles/${accountA.user.id}/like`, {
+      headers: { "X-CSRF-Token": accountB.csrf },
+    });
     const response = await b.request.post(
       `/api/v1/profiles/${accountA.user.id}/like`,
       { headers: { "X-CSRF-Token": accountB.csrf } },
     );
     expect(response.ok()).toBeTruthy();
     await openPerson(pageA, accountB.user);
-    if (!beforeA.liked)
-      await pageA
-        .getByRole("button", { name: "I’m interested", exact: true })
-        .click();
+    await pageA
+      .getByRole("button", { name: "I’m interested", exact: true })
+      .click();
     await expect(
       pageA.getByText("You’re connected ✨", { exact: true }),
     ).toBeVisible();
@@ -359,7 +360,7 @@ test("mutual interest enables chat and messages arrive within ten seconds", asyn
     expect((await b.request.post(`/api/v1/conversations/${accountA.user.id}/messages`, {
       headers: { "X-CSRF-Token": accountB.csrf }, data: { body: "Blocked send", client_id: "blocked-" + Date.now() },
     })).status()).toBe(403);
-    await pageA.getByRole("button", { name: /^Activity(?: \d+)?$/ }).click();
+    await pageA.getByRole("button", { name: /^Activity(?:, \d+ unread)?$/ }).click();
     await pageA.getByRole("tab", { name: "Blocked users", exact: true }).click();
     await pageA.locator(".blocked-row").filter({ hasText: accountB.user.username }).getByRole("button", { name: "Unblock", exact: true }).click();
     await expect(pageA.locator(".blocked-row").filter({ hasText: accountB.user.username })).toHaveCount(0);

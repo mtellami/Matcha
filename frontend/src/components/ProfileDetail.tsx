@@ -15,6 +15,7 @@ export function ProfileDetail({
   back,
   run,
   changed,
+  notify,
   busy,
 }: {
   revision: number;
@@ -23,6 +24,7 @@ export function ProfileDetail({
   back: () => void;
   run: Runner;
   changed: () => Promise<void>;
+  notify: (message: string) => void;
   busy: boolean;
 }) {
   const [profile, setProfile] = useState(person),
@@ -291,7 +293,7 @@ export function ProfileDetail({
                     await api(`/profiles/${person.id}/reports`, "POST", {
                       reason: "Suspected fake account",
                     });
-                    setError("Your report has been received.");
+                    notify("Your report has been received. Thank you.");
                   })
                 }
               >

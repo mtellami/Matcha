@@ -299,6 +299,7 @@ export default function App() {
             back={() => setSelected(null)}
             run={run}
             changed={refreshSummary}
+            notify={setNotice}
             busy={busy}
           />
         ) : view === "profile" ? (

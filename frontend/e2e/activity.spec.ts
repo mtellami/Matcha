@@ -35,7 +35,7 @@ test("sent interest becomes a connection and can be withdrawn from activity", as
     await pair.interestA(true);
     await pair.interestB(true);
     await pair.interestA();
-    await page.getByRole("button", { name: /^Activity(?: \d+)?$/ }).click();
+    await page.getByRole("button", { name: /^Activity(?:, \d+ unread)?$/ }).click();
     await page.getByRole("tab", { name: "Sent interest", exact: true }).click();
     const card = page.locator(".interest-card").filter({ hasText: "@demo2" });
     await expect(card).toContainText("Waiting for mutual interest");
@@ -63,7 +63,7 @@ test("notification polling, individual read state, and opening a message", async
   try {
     await pair.interestA();
     await pair.interestB();
-    await page.getByRole("button", { name: /^Activity(?: \d+)?$/ }).click();
+    await page.getByRole("button", { name: /^Activity(?:, \d+ unread)?$/ }).click();
     await page.getByLabel("Unread only", { exact: true }).check();
     const prefix = `Activity milestone ${testInfo.project.name} ${Date.now()}`;
     for (let i = 0; i < 2; i++) {
