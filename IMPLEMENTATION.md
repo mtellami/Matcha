@@ -9,13 +9,13 @@
 
 ## Bonus implementation
 
-| Bonus feature                                             | Status                                                |
-| --------------------------------------------------------- | ----------------------------------------------------- |
-| Photo gallery with drag-and-drop upload and basic editing | Implemented; PR CI passed; browser acceptance pending |
-| OmniAuth authentication strategies                        | In progress: Google and GitHub                        |
-| Interactive user map with precise GPS location            | Not started                                           |
-| Audio or video chat for connected users                   | Not started                                           |
-| Date and event scheduling for matches                     | Not started                                           |
+| Bonus feature                                             | Status                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------ |
+| Photo gallery with drag-and-drop upload and basic editing | Implemented; PR CI passed; browser acceptance pending  |
+| OmniAuth authentication strategies                        | Implemented; PR CI passed; provider acceptance pending |
+| Interactive user map with precise GPS location            | Not started                                            |
+| Audio or video chat for connected users                   | Not started                                            |
+| Date and event scheduling for matches                     | Not started                                            |
 
 ## Implemented
 
@@ -72,6 +72,7 @@
 - 2026-11-16 bonus milestone: profile photo editor now accepts multi-file drag-and-drop, previews a square crop, supports crop zoom/position, 90-degree rotation, and natural/warm/black-and-white/bright filters, then uploads edited JPEGs through the existing validated photo endpoint. The existing five-photo cap and private storage path remain in use. Browser acceptance for this new flow is pending.
 - 2026-11-16: the photo-editor production build and pre-commit hooks passed. PR #1 (`feature/bonus-photo-gallery`) passed all three CI jobs: formatting/lint, frontend build/unit tests, and backend tests, then was squash-merged as `70e1ebf`.
 - 2026-11-16 bonus milestone started on `feature/bonus-omniauth`: add Google OpenID Connect and GitHub OAuth sign-in with verified-email checks, persistent provider identities, and existing Matcha sessions. Provider buttons will only appear when credentials are configured.
+- 2026-11-16: OmniAuth PR #2 passed all three CI jobs (formatting/lint, frontend build/unit tests, and backend tests). Provider end-to-end acceptance still needs configured Google and GitHub credentials.
 - 2026-11-16 browser acceptance attempt: all 12 Chromium flows passed, including account email, activity, discovery/profile, and live chat recovery. The full 48-case cross-project run then hit the development API's shared 30-auth-requests-per-IP/15-minute guard in the Chrome project; Firefox and mobile were not completed. Treat cross-browser acceptance as pending, not as an app feature failure.
 
 - Activity milestone: 141 backend scenarios pass on disposable PostgreSQL 17; 28 frontend unit scenarios (six test files) pass, including history recovery after large bursts and removal of stale filtered rows. Production builds pass.
