@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Compass, Leaf, LogOut, MessageCircle, User } from "lucide-react";
 import { io } from "socket.io-client";
-import { startRealtime, type ConnectionState } from "./features/realtime/realtime";
+import {
+  startRealtime,
+  type ConnectionState,
+} from "./features/realtime/realtime";
 import { api, ApiError, setCsrf } from "./shared/api";
 import { Auth } from "./features/auth/Auth";
 import { Activity } from "./features/activity/Activity";
@@ -24,7 +27,9 @@ export default function App() {
     [pending, setPending] = useState(0),
     [selected, setSelected] = useState<Profile | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [profileFocus, setProfileFocus] = useState<{ field: string } | null>(null);
+  const [profileFocus, setProfileFocus] = useState<{ field: string } | null>(
+    null,
+  );
   const [summary, setSummary] = useState<Summary>({
     notifications: 0,
     messages: 0,
@@ -241,7 +246,10 @@ export default function App() {
           )}
         </div>
       </header>
-      <main aria-busy={busy} data-connection-state={me ? connection : undefined}>
+      <main
+        aria-busy={busy}
+        data-connection-state={me ? connection : undefined}
+      >
         {me && connection === "reconnecting" && (
           <p className="connection-note" role="status">
             Reconnecting… You can keep browsing.
@@ -328,8 +336,12 @@ export default function App() {
         ) : !canDiscover(me) ? (
           <>
             <div className="eyebrow">WELCOME TO MATCHA</div>
-            <h1>Let’s start with <em>you.</em></h1>
-            <p>A little about yourself helps us find people you’ll want to meet.</p>
+            <h1>
+              Let’s start with <em>you.</em>
+            </h1>
+            <p>
+              A little about yourself helps us find people you’ll want to meet.
+            </p>
             <ProfileCompletion me={me} edit={editProfile} />
           </>
         ) : (

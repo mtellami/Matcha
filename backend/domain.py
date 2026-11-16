@@ -1,6 +1,8 @@
 """Pure matching rules, shared by discovery and profile responses."""
 
+from dataclasses import dataclass
 import math
+import re
 from datetime import date
 
 
@@ -29,10 +31,6 @@ def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         * math.sin(math.radians(lon1 - lon2) / 2) ** 2
     )
     return round(6371 * 2 * math.asin(math.sqrt(min(1, a))), 1)
-
-
-from dataclasses import dataclass
-import re
 
 
 @dataclass(frozen=True)

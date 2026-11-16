@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nearbyCity, type Location } from "../src/features/location/location.ts";
+import {
+  nearbyCity,
+  type Location,
+} from "../src/features/location/location.ts";
 
 const places: Location[] = [
   {

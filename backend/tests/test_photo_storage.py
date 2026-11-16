@@ -10,7 +10,8 @@ pytestmark = pytest.mark.skipif(
 def test_storage_failure_does_not_prevent_logical_photo_removal(
     client, accounts, monkeypatch
 ):
-    import app, storage
+    import app
+    import storage
 
     users, sign_in = accounts
     headers = sign_in(users[0])
@@ -25,7 +26,7 @@ def test_storage_failure_does_not_prevent_logical_photo_removal(
 
     monkeypatch.setattr(storage, "delete_photo", unavailable)
     assert (
-        client.delete(f'/api/v1/me/photos/{photo["id"]}', headers=headers).status_code
+        client.delete(f"/api/v1/me/photos/{photo['id']}", headers=headers).status_code
         == 200
     )
     app.cleanup_pending_photos()
@@ -47,7 +48,8 @@ def test_storage_failure_does_not_prevent_logical_photo_removal(
 
 
 def test_cleanup_never_deletes_a_referenced_photo(client, accounts, monkeypatch):
-    import app, storage
+    import app
+    import storage
 
     users, _ = accounts
     with app.db() as conn:
@@ -64,7 +66,8 @@ def test_cleanup_never_deletes_a_referenced_photo(client, accounts, monkeypatch)
 def test_failed_database_commit_leaves_an_unpublished_upload_for_cleanup(
     client, accounts, monkeypatch
 ):
-    import app, storage
+    import app
+    import storage
 
     users, _ = accounts
     original_db = app.db

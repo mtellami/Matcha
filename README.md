@@ -46,6 +46,16 @@ Photos remain private and are served through authenticated backend requests. Dat
 
 ## Checks
 
+Install the commit hooks once so formatting and lint fixes run automatically before each commit:
+
+```sh
+pipx install pre-commit
+npm --prefix frontend ci
+pre-commit install
+```
+
+The hooks run Prettier on frontend and config files, and Ruff linting/formatting on Python. Run them manually with `pre-commit run --all-files`; CI runs the same checks on every pull request.
+
 New members see a profile-completion checklist before discovery. Each item opens its field in **My profile**. Select reusable interest buttons or enter your own tags, then save. **Preview my public profile** shows the saved public view, including your fame rating. A photo is required before expressing interest.
 
 **Activity** includes received and sent interest. Profile cards show whether the connection is mutual; you can reciprocate, open a chat, or remove your interest there. Removing mutual interest ends the connection and disables chat. Blocked and unverified members are hidden from these lists.

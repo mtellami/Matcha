@@ -14,7 +14,9 @@ export async function historyWindow<T extends { id: number }>(
     if (next === null || oldest === null || next <= oldest)
       return { items, next_before: next };
     if (!page.items.length || (before !== null && next >= before))
-      throw new Error("Activity history returned an invalid cursor. Please refresh.");
+      throw new Error(
+        "Activity history returned an invalid cursor. Please refresh.",
+      );
     before = next;
   }
 }

@@ -57,8 +57,13 @@ export function ProfileDetail({
   }, []);
   useEffect(() => {
     if (!readMarker.current || !lastId) return;
-    const observer = new IntersectionObserver((entries) =>
-      setVisibleMessage(entries[0].isIntersecting && entries[0].intersectionRatio >= 1 ? lastId : null),
+    const observer = new IntersectionObserver(
+      (entries) =>
+        setVisibleMessage(
+          entries[0].isIntersecting && entries[0].intersectionRatio >= 1
+            ? lastId
+            : null,
+        ),
       { threshold: 1 },
     );
     observer.observe(readMarker.current);
@@ -66,12 +71,19 @@ export function ProfileDetail({
   }, [profile.connected, lastId]);
   useEffect(() => {
     if (!lastId || !bottomVisible || !profile.connected || !visible) return;
-    let active = true, inFlight = false;
+    let active = true,
+      inFlight = false;
     async function acknowledge() {
       if (inFlight || acknowledgedThrough.current === lastId) return;
       inFlight = true;
       try {
-        await api(`/conversations/${person.id}/read`, "POST", { through_id: lastId }, undefined, 4000);
+        await api(
+          `/conversations/${person.id}/read`,
+          "POST",
+          { through_id: lastId },
+          undefined,
+          4000,
+        );
         if (active) {
           acknowledgedThrough.current = lastId ?? null;
           await changed();
@@ -84,7 +96,10 @@ export function ProfileDetail({
     }
     void acknowledge();
     const timer = setInterval(acknowledge, 5000);
-    return () => { active = false; clearInterval(timer); };
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, [lastId, bottomVisible, profile.connected, person.id, changed, visible]);
   useEffect(() => {
     if (ownProfile) return;
@@ -167,8 +182,20 @@ export function ProfileDetail({
     void pollNow.current();
   }, [revision]);
   async function relationship() {
-    await api(`/profiles/${person.id}/like`, profile.liked ? "DELETE" : "POST", undefined, undefined, 8000);
-    const status = await api<Status>(`/profiles/${person.id}/status`, "GET", undefined, undefined, 4000);
+    await api(
+      `/profiles/${person.id}/like`,
+      profile.liked ? "DELETE" : "POST",
+      undefined,
+      undefined,
+      8000,
+    );
+    const status = await api<Status>(
+      `/profiles/${person.id}/status`,
+      "GET",
+      undefined,
+      undefined,
+      4000,
+    );
     setProfile((current) => ({ ...current, ...status }));
     await changed();
   }
@@ -177,10 +204,16 @@ export function ProfileDetail({
     if (!body) return;
     if (messageKey.current?.body !== body)
       messageKey.current = { body, key: crypto.randomUUID() };
-    await api(`/conversations/${person.id}/messages`, "POST", {
-      body,
-      client_id: messageKey.current.key,
-    }, undefined, 8000);
+    await api(
+      `/conversations/${person.id}/messages`,
+      "POST",
+      {
+        body,
+        client_id: messageKey.current.key,
+      },
+      undefined,
+      8000,
+    );
     setDraft("");
     messageKey.current = null;
     await pollNow.current();
@@ -199,7 +232,12 @@ export function ProfileDetail({
       <button className="back" onClick={back}>
         {ownProfile ? "← Back to editing" : "← Back"}
       </button>
-      {ownProfile && <p className="preview-note">Your public profile · This is what other members can see. Save changes in your profile editor before previewing.</p>}
+      {ownProfile && (
+        <p className="preview-note">
+          Your public profile · This is what other members can see. Save changes
+          in your profile editor before previewing.
+        </p>
+      )}
       {error && (
         <p className="alert" role="alert">
           {error}
@@ -258,48 +296,52 @@ export function ProfileDetail({
                 <span key={tag}>#{tag}</span>
               ))}
             </div>
-            {!ownProfile && <p>
-              {profile.connected
-                ? "You’re connected ✨"
-                : profile.likes_you
-                  ? "They’re interested in you"
-                  : ""}
-            </p>}
-            {!ownProfile && <div className="actions">
-              <button
-                className="primary"
-                disabled={busy}
-                onClick={() => void run(relationship)}
-              >
-                <Heart size={18} />
-                {profile.liked ? "Remove interest" : "I’m interested"}
-              </button>
-              <button
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    await api(`/profiles/${person.id}/block`, "POST");
-                    await changed();
-                    back();
-                  })
-                }
-              >
-                Block
-              </button>
-              <button
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    await api(`/profiles/${person.id}/reports`, "POST", {
-                      reason: "Suspected fake account",
-                    });
-                    notify("Your report has been received. Thank you.");
-                  })
-                }
-              >
-                Report fake
-              </button>
-            </div>}
+            {!ownProfile && (
+              <p>
+                {profile.connected
+                  ? "You’re connected ✨"
+                  : profile.likes_you
+                    ? "They’re interested in you"
+                    : ""}
+              </p>
+            )}
+            {!ownProfile && (
+              <div className="actions">
+                <button
+                  className="primary"
+                  disabled={busy}
+                  onClick={() => void run(relationship)}
+                >
+                  <Heart size={18} />
+                  {profile.liked ? "Remove interest" : "I’m interested"}
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async () => {
+                      await api(`/profiles/${person.id}/block`, "POST");
+                      await changed();
+                      back();
+                    })
+                  }
+                >
+                  Block
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async () => {
+                      await api(`/profiles/${person.id}/reports`, "POST", {
+                        reason: "Suspected fake account",
+                      });
+                      notify("Your report has been received. Thank you.");
+                    })
+                  }
+                >
+                  Report fake
+                </button>
+              </div>
+            )}
             {profile.connected && (
               <section className="chat">
                 <h2>
@@ -315,7 +357,10 @@ export function ProfileDetail({
                           next_before: number | null;
                         }>(
                           `/conversations/${person.id}/messages?before=${next}`,
-                          "GET", undefined, undefined, 4000,
+                          "GET",
+                          undefined,
+                          undefined,
+                          4000,
                         );
                         setMessages((items) =>
                           mergeMessages(items, response.messages),
@@ -346,7 +391,9 @@ export function ProfileDetail({
                           : `${profile.first_name} sent: `}
                       </span>
                       {message.body}
-                      <small ref={message.id === lastId ? readMarker : undefined}>
+                      <small
+                        ref={message.id === lastId ? readMarker : undefined}
+                      >
                         {new Date(message.created_at).toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",

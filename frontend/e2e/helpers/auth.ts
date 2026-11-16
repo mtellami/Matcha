@@ -22,13 +22,17 @@ export async function login(page: Page, username = "demo1") {
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
   }
-  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Main navigation" }),
+  ).toBeVisible();
   sessions.set(username, await page.context().cookies());
 }
 
 export async function loginByApi(context: BrowserContext, username: string) {
   if (await restore(context, username)) return;
-  const response = await context.request.post("/api/v1/auth/login", { data: { username, password } });
+  const response = await context.request.post("/api/v1/auth/login", {
+    data: { username, password },
+  });
   expect(response.ok()).toBeTruthy();
   sessions.set(username, await context.cookies());
 }

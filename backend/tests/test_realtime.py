@@ -46,7 +46,7 @@ def test_incremental_history_recovers_a_large_offline_burst(client, accounts):
     assert [int(m["body"]) for m in received] == list(range(120))
     assert (
         client.get(
-            f'/api/v1/conversations/{b}/messages?after={received[-1]["id"]}'
+            f"/api/v1/conversations/{b}/messages?after={received[-1]['id']}"
         ).json["messages"]
         == []
     )

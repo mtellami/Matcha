@@ -22,8 +22,13 @@ export async function api<T = { message: string }>(
   signal?: AbortSignal,
   timeoutMs?: number,
 ): Promise<T> {
-  const timeout = timeoutMs === undefined ? undefined : AbortSignal.timeout(timeoutMs);
-  const requestSignal = timeout ? (signal ? AbortSignal.any([signal, timeout]) : timeout) : signal;
+  const timeout =
+    timeoutMs === undefined ? undefined : AbortSignal.timeout(timeoutMs);
+  const requestSignal = timeout
+    ? signal
+      ? AbortSignal.any([signal, timeout])
+      : timeout
+    : signal;
   try {
     const form = body instanceof FormData;
     const response = await fetch("/api/v1" + path, {
@@ -44,8 +49,8 @@ export async function api<T = { message: string }>(
         data?.error?.message || `Request failed (${response.status})`,
         response.status,
         data?.error?.fields &&
-        typeof data.error.fields === "object" &&
-        !Array.isArray(data.error.fields)
+          typeof data.error.fields === "object" &&
+          !Array.isArray(data.error.fields)
           ? Object.fromEntries(
               Object.entries(data.error.fields).filter(
                 (entry): entry is [string, string] =>

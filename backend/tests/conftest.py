@@ -21,7 +21,7 @@ def client(monkeypatch):
     from app import app, db as original_db
 
     app.config["TESTING"] = True
-    address = f"198.18.{secrets.randbelow(256)}.{secrets.randbelow(254)+1}"
+    address = f"198.18.{secrets.randbelow(256)}.{secrets.randbelow(254) + 1}"
     with app.test_client() as client:
         client.environ_base["REMOTE_ADDR"] = address
         yield client

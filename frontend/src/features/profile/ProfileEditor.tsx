@@ -44,7 +44,12 @@ export function ProfileEditor({
   const [locationNote, setLocationNote] = useState("");
   const [knownTags, setKnownTags] = useState<string[]>([]);
   const [tags, setTags] = useState(me.tags.join(", "));
-  const selectedTags = new Set(tags.split(",").map((tag) => tag.trim().replace(/^#/, "").toLowerCase()).filter(Boolean));
+  const selectedTags = new Set(
+    tags
+      .split(",")
+      .map((tag) => tag.trim().replace(/^#/, "").toLowerCase())
+      .filter(Boolean),
+  );
   useEffect(() => {
     if (!focus) return;
     const target = document.getElementById(focus.field);
@@ -115,7 +120,9 @@ export function ProfileEditor({
         Show up as <em>yourself.</em>
       </h1>
       <div className="profile-tools">
-        <button type="button" disabled={busy} onClick={preview}>Preview my public profile</button>
+        <button type="button" disabled={busy} onClick={preview}>
+          Preview my public profile
+        </button>
         <small>Preview shows your saved changes.</small>
       </div>
       <ProfileCompletion me={me} edit={edit} discover={discover} />
@@ -269,13 +276,27 @@ export function ProfileEditor({
             <option key={tag} value={tag} />
           ))}
         </datalist>
-        <div className="interest-picker" role="group" aria-label="Choose reusable interests">
-          <p>Pick shared interests, or type your own above. {selectedTags.size}/20 selected.</p>
+        <div
+          className="interest-picker"
+          role="group"
+          aria-label="Choose reusable interests"
+        >
+          <p>
+            Pick shared interests, or type your own above. {selectedTags.size}
+            /20 selected.
+          </p>
           <div className="interest-options">
             {[...new Set([...selectedTags, ...knownTags])].map((tag) => (
-              <button type="button" key={tag} aria-pressed={selectedTags.has(tag)}
+              <button
+                type="button"
+                key={tag}
+                aria-pressed={selectedTags.has(tag)}
                 disabled={!selectedTags.has(tag) && selectedTags.size >= 20}
-                onClick={() => toggleTag(tag)}>#{tag}{selectedTags.has(tag) ? " ✓" : " +"}</button>
+                onClick={() => toggleTag(tag)}
+              >
+                #{tag}
+                {selectedTags.has(tag) ? " ✓" : " +"}
+              </button>
             ))}
           </div>
         </div>
@@ -366,7 +387,12 @@ export function ProfileEditor({
           Save profile <ArrowUpRight size={18} />
         </button>
       </form>
-      <section className="panel profile-form" id="profile-photos" tabIndex={-1} aria-labelledby="photos-heading">
+      <section
+        className="panel profile-form"
+        id="profile-photos"
+        tabIndex={-1}
+        aria-labelledby="photos-heading"
+      >
         <h2 id="photos-heading">Your photos</h2>
         <p>Up to five photos. Choose the picture people see first.</p>
         <div className="photo-row">

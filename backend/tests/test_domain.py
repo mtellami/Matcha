@@ -1,6 +1,13 @@
 from datetime import date
 import pytest
-from domain import age_on, distance_km, fame_rating
+from domain import (
+    SearchFilters,
+    age_on,
+    distance_km,
+    fame_rating,
+    message_after,
+    page_cursor,
+)
 
 
 def test_adult_birthday_boundary():
@@ -39,9 +46,6 @@ def test_geographic_distance():
 def test_invalid_locations(coords):
     with pytest.raises(ValueError):
         distance_km(*coords)
-
-
-from domain import SearchFilters, page_cursor
 
 
 def test_search_filters_normalize_tags_and_location():
@@ -126,9 +130,6 @@ def test_history_cursor_defaults_and_limits():
     for value in ["-1", "0", "abc", "1.5", "9223372036854775808", [], {}]:
         with pytest.raises(ValueError):
             page_cursor(value)
-
-
-from domain import message_after
 
 
 def test_message_after_cursor_allows_zero_and_non_contiguous_ids():

@@ -93,9 +93,9 @@ def test_old_password_login_cannot_survive_a_concurrent_reset(
                     waiting = True
                     break
                 time.sleep(0.01)
-            assert (
-                waiting
-            ), "Reset must wait for the login account lock before revoking sessions"
+            assert waiting, (
+                "Reset must wait for the login account lock before revoking sessions"
+            )
             release_login.set()
             assert login.result(timeout=20).status_code == 200
             assert reset.result(timeout=20).status_code == 200

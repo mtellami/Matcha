@@ -1,5 +1,5 @@
-import { api } from "../../shared/api";
-import type { Message } from "../../shared/types";
+import { api } from "../../shared/api.ts";
+import type { Message } from "../../shared/types.ts";
 
 export type MessagePage = {
   messages: Message[];

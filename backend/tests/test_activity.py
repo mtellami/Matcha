@@ -26,7 +26,9 @@ def test_sent_interest_tracks_matching_and_withdrawal(client, accounts):
     headers = sign_in(a)
     activity = client.get("/api/v1/me/activity").json
     assert activity["sent"][0]["connected"] and activity["likes"][0]["connected"]
-    assert client.delete(f"/api/v1/profiles/{b}/like", headers=headers).status_code == 200
+    assert (
+        client.delete(f"/api/v1/profiles/{b}/like", headers=headers).status_code == 200
+    )
     activity = client.get("/api/v1/me/activity").json
     assert not activity["sent"] and not activity["likes"][0]["connected"]
     sign_in(c)
@@ -35,15 +37,21 @@ def test_sent_interest_tracks_matching_and_withdrawal(client, accounts):
 
 
 @pytest.mark.parametrize("blocked_by_viewer", [True, False])
-def test_interest_lists_hide_blocked_and_unverified_profiles(client, accounts, blocked_by_viewer):
+def test_interest_lists_hide_blocked_and_unverified_profiles(
+    client, accounts, blocked_by_viewer
+):
     from app import db
 
     users, sign_in = accounts
     a, b, c = users
     with db() as conn:
-        conn.execute("INSERT INTO likes VALUES(%s,%s),(%s,%s),(%s,%s),(%s,%s)",
-                     (a, b, b, a, a, c, c, a))
-        conn.execute("INSERT INTO blocks VALUES(%s,%s)", (a, b) if blocked_by_viewer else (b, a))
+        conn.execute(
+            "INSERT INTO likes VALUES(%s,%s),(%s,%s),(%s,%s),(%s,%s)",
+            (a, b, b, a, a, c, c, a),
+        )
+        conn.execute(
+            "INSERT INTO blocks VALUES(%s,%s)", (a, b) if blocked_by_viewer else (b, a)
+        )
         conn.execute("UPDATE users SET verified=false WHERE id=%s", (c,))
     sign_in(a)
     activity = client.get("/api/v1/me/activity").json

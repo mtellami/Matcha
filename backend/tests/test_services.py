@@ -132,9 +132,9 @@ def test_account_messages_have_single_use_links_and_no_passwords(kind, monkeypat
     )
     assert (
         f"https://matcha.example/#action={kind}&token=opaque-token"
-        in message.get_content()
+        in message.get_body(preferencelist=("plain",)).get_content()
     )
-    assert "one hour" in message.get_content()
+    assert "one hour" in message.get_body(preferencelist=("plain",)).get_content()
 
 
 def test_delivery_failure_does_not_log_the_link_or_recipient(monkeypatch, caplog):
@@ -167,9 +167,13 @@ def test_successful_delivery_is_reported(monkeypatch):
 
 
 def test_email_link_does_not_send_token_in_http_request_or_referrer():
-    from urllib.parse import urlparse,parse_qs
-    message=mailer.account_message('member@example.test','verify','secret-token','https://matcha.example')
-    url=next(line for line in message.get_content().splitlines() if line.startswith('http'))
-    parsed=urlparse(url)
-    assert parsed.query=='' and 'secret-token' not in parsed.path
-    assert parse_qs(parsed.fragment)['token']==['secret-token']
+    from urllib.parse import parse_qs, urlparse
+
+    message = mailer.account_message(
+        "member@example.test", "verify", "secret-token", "https://matcha.example"
+    )
+    plain_text = message.get_body(preferencelist=("plain",)).get_content()
+    url = next(line for line in plain_text.splitlines() if line.startswith("http"))
+    parsed = urlparse(url)
+    assert parsed.query == "" and "secret-token" not in parsed.path
+    assert parse_qs(parsed.fragment)["token"] == ["secret-token"]
