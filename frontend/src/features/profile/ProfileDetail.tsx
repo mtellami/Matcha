@@ -1,8 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { Heart, Leaf, MessageCircle, Phone, Video } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  Heart,
+  Leaf,
+  MapPin,
+  MessageCircle,
+  Phone,
+  Video,
+  X,
+} from "lucide-react";
 import { api, ApiError } from "../../shared/api";
 import { messageUpdates, mergeMessages } from "../chat/chat";
-import type { Message, Profile, Runner } from "../../shared/types";
+import type { DatePlan, Message, Profile, Runner } from "../../shared/types";
+
+function localDateTime(value: Date) {
+  return new Date(value.getTime() - value.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
+}
 
 type Status = Pick<
   Profile,
@@ -36,6 +52,9 @@ export function ProfileDetail({
     [unavailable, setUnavailable] = useState(false),
     [activePhoto, setActivePhoto] = useState(person.photos?.[0]?.id);
   const [draft, setDraft] = useState("");
+  const [datePlans, setDatePlans] = useState<DatePlan[]>([]);
+  const [dateError, setDateError] = useState("");
+  const [datesLoading, setDatesLoading] = useState(false);
   const ownProfile = person.id === myId;
   const [visibleMessage, setVisibleMessage] = useState<number | null>(null);
   const bottom = useRef<HTMLDivElement>(null),
@@ -183,6 +202,57 @@ export function ProfileDetail({
   useEffect(() => {
     void pollNow.current();
   }, [revision]);
+  useEffect(() => {
+    if (!profile.connected) {
+      setDatePlans([]);
+      return;
+    }
+    let active = true;
+    setDatesLoading(true);
+    api<{ events: DatePlan[] }>(`/conversations/${person.id}/dates`)
+      .then((response) => {
+        if (active) {
+          setDatePlans(response.events);
+          setDateError("");
+        }
+      })
+      .catch((error) => {
+        if (active) setDateError((error as Error).message);
+      })
+      .finally(() => {
+        if (active) setDatesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [person.id, profile.connected, revision]);
+
+  async function refreshDatePlans() {
+    const response = await api<{ events: DatePlan[] }>(
+      `/conversations/${person.id}/dates`,
+    );
+    setDatePlans(response.events);
+  }
+
+  async function respondToDate(
+    eventId: number,
+    response: "accepted" | "declined",
+  ) {
+    await api(`/dates/${eventId}/rsvp`, "POST", { response });
+    await refreshDatePlans();
+    notify(
+      response === "accepted" ? "Date plan confirmed" : "Invitation declined",
+    );
+  }
+
+  async function cancelDate(eventId: number) {
+    await api(`/dates/${eventId}/cancel`, "POST");
+    await refreshDatePlans();
+    notify("Date plan cancelled");
+  }
+
+  const dateMin = localDateTime(new Date(Date.now() + 10 * 60_000));
+  const dateMax = localDateTime(new Date(Date.now() + 90 * 24 * 60 * 60_000));
   async function relationship() {
     await api(
       `/profiles/${person.id}/like`,
@@ -370,6 +440,176 @@ export function ProfileDetail({
                     to the other caller.
                   </small>
                 </div>
+                <section
+                  className="date-planner"
+                  aria-labelledby="date-planner-title"
+                >
+                  <div className="date-planner-heading">
+                    <h3 id="date-planner-title">
+                      <CalendarDays size={19} /> Plan a date
+                    </h3>
+                    <p>
+                      Pick a place and time together. Only this connection can
+                      see the plan.
+                    </p>
+                  </div>
+                  {dateError && (
+                    <p className="date-error" role="alert">
+                      {dateError}
+                    </p>
+                  )}
+                  {datesLoading ? (
+                    <p role="status">Loading date plans…</p>
+                  ) : datePlans.length > 0 ? (
+                    <ul className="date-plan-list">
+                      {datePlans.map((plan) => {
+                        const statusLabel =
+                          plan.status === "pending"
+                            ? plan.creator === myId
+                              ? "Waiting for a reply"
+                              : "Invitation"
+                            : plan.status === "accepted"
+                              ? "Confirmed"
+                              : plan.status === "declined"
+                                ? "Declined"
+                                : "Cancelled";
+                        return (
+                          <li className="date-plan" key={plan.id}>
+                            <div className="date-plan-copy">
+                              <strong>{plan.title}</strong>
+                              <span>
+                                <CalendarDays size={14} />
+                                {new Date(plan.starts_at).toLocaleString([], {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })}
+                              </span>
+                              <span>
+                                <MapPin size={14} /> {plan.location}
+                              </span>
+                              {plan.details && <p>{plan.details}</p>}
+                              <small className={`date-status ${plan.status}`}>
+                                {statusLabel}
+                              </small>
+                            </div>
+                            <div className="date-plan-actions">
+                              {plan.status === "pending" &&
+                                plan.invitee === myId && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      aria-label={`Accept ${plan.title} invitation`}
+                                      disabled={busy}
+                                      onClick={() =>
+                                        void run(() =>
+                                          respondToDate(plan.id, "accepted"),
+                                        )
+                                      }
+                                    >
+                                      <Check size={16} /> Accept
+                                    </button>
+                                    <button
+                                      type="button"
+                                      aria-label={`Decline ${plan.title} invitation`}
+                                      disabled={busy}
+                                      onClick={() =>
+                                        void run(() =>
+                                          respondToDate(plan.id, "declined"),
+                                        )
+                                      }
+                                    >
+                                      <X size={16} /> Decline
+                                    </button>
+                                  </>
+                                )}
+                              {(plan.status === "pending" ||
+                                plan.status === "accepted") && (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void run(() => cancelDate(plan.id))
+                                  }
+                                >
+                                  Cancel plan
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="date-empty">
+                      No date plans yet. Start with a place you both like.
+                    </p>
+                  )}
+                  <form
+                    className="date-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const form = event.currentTarget;
+                      const values = new FormData(form);
+                      void run(async () => {
+                        await api(`/conversations/${person.id}/dates`, "POST", {
+                          title: values.get("title"),
+                          location: values.get("location"),
+                          starts_at: new Date(
+                            String(values.get("starts_at")),
+                          ).toISOString(),
+                          details: values.get("details") || "",
+                        });
+                        form.reset();
+                        await refreshDatePlans();
+                        notify("Date invitation sent");
+                      });
+                    }}
+                  >
+                    <div className="date-form-grid">
+                      <label>
+                        Plan
+                        <input
+                          name="title"
+                          placeholder="Coffee and a walk"
+                          maxLength={100}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Place
+                        <input
+                          name="location"
+                          placeholder="A café or meeting spot"
+                          maxLength={160}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Date and time
+                        <input
+                          name="starts_at"
+                          type="datetime-local"
+                          min={dateMin}
+                          max={dateMax}
+                          required
+                        />
+                      </label>
+                    </div>
+                    <label>
+                      A note (optional)
+                      <textarea
+                        name="details"
+                        placeholder="Anything useful to know?"
+                        maxLength={500}
+                        rows={2}
+                      />
+                    </label>
+                    <button className="primary" disabled={busy}>
+                      Send date invitation
+                    </button>
+                    <small>Plans can be scheduled up to 90 days ahead.</small>
+                  </form>
+                </section>
                 {next && (
                   <button
                     disabled={busy}
