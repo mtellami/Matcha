@@ -34,8 +34,18 @@ export type Me = {
   city: string | null;
   latitude: number | null;
   longitude: number | null;
+  map_visible: boolean;
   tags: string[];
   photos: Photo[];
+};
+export type MapUser = {
+  id: number;
+  first_name: string;
+  age: number;
+  city: string;
+  latitude: number;
+  longitude: number;
+  photo_id: number | null;
 };
 export type Notification = {
   id: number;

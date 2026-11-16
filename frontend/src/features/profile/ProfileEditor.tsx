@@ -94,8 +94,8 @@ export function ProfileEditor({
     setLocationNote("Waiting for location permission…");
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const latitude = Math.round(position.coords.latitude * 100) / 100,
-          longitude = Math.round(position.coords.longitude * 100) / 100;
+        const latitude = position.coords.latitude,
+          longitude = position.coords.longitude;
         setCoords({ latitude, longitude });
         const nearest = nearbyCity(places, latitude, longitude);
         setCity(nearest?.city || "");
@@ -103,7 +103,7 @@ export function ProfileEditor({
         setLocationSource("gps");
         setLocationNote(
           nearest
-            ? "Approximate GPS location received. Check the suggested city."
+            ? "GPS location received. Check the suggested city or neighborhood."
             : "Location received. Enter the city or neighborhood for this location.",
         );
       },
@@ -111,7 +111,7 @@ export function ProfileEditor({
         setLocationNote(
           "Location permission denied or unavailable. Choose a city instead.",
         ),
-      { timeout: 10000, maximumAge: 60000 },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
     );
   }
   return (
@@ -151,6 +151,7 @@ export function ProfileEditor({
                 .map((t) => t.trim().replace(/^#/, ""))
                 .filter(Boolean),
               preferences: String(fields.preferences).split(","),
+              map_visible: fields.map_visible === "on",
             });
             await saved();
             notify("Profile saved");
@@ -303,7 +304,10 @@ export function ProfileEditor({
         </div>
         <fieldset>
           <legend>Your approximate location</legend>
-          <p>Choose a city, or use GPS to set your approximate location.</p>
+          <p>
+            Choose a city, or use GPS to save a more precise location for
+            distance sorting.
+          </p>
           <label>
             City or neighborhood
             <input
@@ -370,7 +374,7 @@ export function ProfileEditor({
               : locationNote ||
                 (placesFailed
                   ? "City suggestions are unavailable. You can retry or use GPS."
-                  : "Only approximate coordinates are stored. GPS is optional.")}
+                  : "Precise coordinates stay private unless you enable map sharing below. GPS is optional.")}
           </small>
           {placesFailed && !placesLoading && (
             <button
@@ -383,6 +387,20 @@ export function ProfileEditor({
               Retry city suggestions
             </button>
           )}
+          <label className="map-sharing-option">
+            <input
+              type="checkbox"
+              name="map_visible"
+              defaultChecked={me.map_visible}
+            />
+            <span>
+              <strong>Show my location on the map</strong>
+              <small>
+                Only people who match your discovery preferences and also prefer
+                your gender can see your pin. Turn this off any time.
+              </small>
+            </span>
+          </label>
         </fieldset>
         <button className="primary" disabled={busy}>
           Save profile <ArrowUpRight size={18} />

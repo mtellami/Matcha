@@ -42,7 +42,7 @@ def profile_fields(data):
             value = float(value)
             if not math.isfinite(value) or not -limit <= value <= limit:
                 raise ValueError()
-            result[key] = round(value, 2)
+            result[key] = round(value, 5)
         except (ValueError, TypeError):
             errors[key] = "Select a city or provide an approximate GPS location."
     genders = {"man", "woman", "nonbinary"}
@@ -60,6 +60,11 @@ def profile_fields(data):
         errors["preferences"] = "Choose valid gender preferences."
     else:
         result["preferences"] = list(dict.fromkeys(preferences))
+    map_visible = data.get("map_visible")
+    if map_visible is not None and not isinstance(map_visible, bool):
+        errors["map_visible"] = "Choose whether to share your map location."
+    else:
+        result["map_visible"] = map_visible
     tags = data.get("tags")
     if (
         not isinstance(tags, list)

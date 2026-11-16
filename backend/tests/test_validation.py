@@ -25,7 +25,7 @@ def test_profile_normalizes_fields_and_defaults_preferences():
     assert (
         fields["first_name"] == "Alex" and fields["bio"] == "Coffee and conversation."
     )
-    assert fields["latitude"] == 34.02 and fields["longitude"] == -6.84
+    assert fields["latitude"] == 34.024 and fields["longitude"] == -6.844
     assert fields["tags"] == ["coffee", "music"] and fields["preferences"] == [
         "man",
         "woman",
