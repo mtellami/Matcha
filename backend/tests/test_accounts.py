@@ -52,7 +52,10 @@ def test_registration_survives_smtp_outage_and_verification_can_be_resent(
 
         link = next(
             line
-            for line in delivered[0].get_content().splitlines()
+            for line in delivered[0]
+            .get_body(preferencelist=("plain",))
+            .get_content()
+            .splitlines()
             if line.startswith("http")
         )
         token = parse_qs(urlparse(link).fragment)["token"][0]
