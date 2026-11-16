@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowUpRight, Leaf } from "lucide-react";
 import { api, setCsrf } from "../../shared/api";
 import type { Runner } from "../../shared/types";
@@ -23,6 +23,26 @@ export function Auth({
   busy: boolean;
 }) {
   const [mode, setMode] = useState("login");
+  const [providers, setProviders] = useState<string[]>([]);
+  const [oauthError] = useState(() => {
+    const value = new URLSearchParams(location.search).get("oauth_error");
+    if (value === "account_exists")
+      return "An account already uses this email. Sign in with your existing method.";
+    if (value === "failed" || value === "unavailable")
+      return "Social sign-in could not be completed. Try again or sign in with your email.";
+    return "";
+  });
+  useEffect(() => {
+    let active = true;
+    void api<{ providers: string[] }>("/auth/providers")
+      .then((result) => {
+        if (active) setProviders(result.providers);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const fields = Object.fromEntries(new FormData(event.currentTarget));
@@ -189,6 +209,25 @@ export function Auth({
                   : "Create account"}
           <ArrowUpRight size={18} />
         </button>
+        {oauthError && (
+          <p className="oauth-error" role="alert">
+            {oauthError}
+          </p>
+        )}
+        {!action && mode === "login" && providers.length > 0 && (
+          <div className="oauth-options" aria-label="Social sign-in options">
+            <span>Or sign in with</span>
+            {providers.map((provider) => (
+              <a
+                className="oauth-button"
+                href={`/api/v1/auth/${provider}`}
+                key={provider}
+              >
+                Continue with {provider === "github" ? "GitHub" : "Google"}
+              </a>
+            ))}
+          </div>
+        )}
         {action && (
           <button
             type="button"

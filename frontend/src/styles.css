@@ -364,6 +364,34 @@ textarea {
   font-size: 12px;
   background: none;
 }
+.oauth-options {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+.oauth-options > span {
+  color: #748071;
+  font-size: 12px;
+}
+.oauth-button {
+  display: block;
+  padding: 11px 14px;
+  border: 1px solid #dce3d5;
+  border-radius: 9px;
+  background: #fff;
+  color: #34472d;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.oauth-button:hover {
+  background: #f3f6ee;
+}
+.oauth-error {
+  margin: 0;
+  color: #a53127;
+  font-size: 13px;
+}
 .organic {
   display: flex;
   align-items: center;
