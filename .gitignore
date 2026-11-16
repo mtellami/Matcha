@@ -8,7 +8,6 @@ uploads/
 *.pyc
 .env.*
 !.env.example
-IMPLEMENTATION.md
 requirements.pdf
 playwright-report/
 test-results/
