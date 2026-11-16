@@ -636,7 +636,7 @@ def logout():
 def me():
     with db() as conn:
         user = conn.execute(
-            "SELECT id,email,username,first_name,last_name,birth_date,gender,preferences,bio,city,latitude,longitude,tags FROM users WHERE id=%s",
+            "SELECT id,email,username,first_name,last_name,birth_date,gender,preferences,bio,city,latitude,longitude,tags,map_visible FROM users WHERE id=%s",
             (g.uid,),
         ).fetchone()
         user["photos"] = conn.execute(
@@ -654,7 +654,7 @@ def edit_profile():
     fields = profile_fields(select_location(data()))
     with db() as conn:
         conn.execute(
-            "UPDATE users SET first_name=%s,last_name=%s,birth_date=%s,gender=%s,preferences=%s,bio=%s,city=%s,latitude=%s,longitude=%s,tags=%s WHERE id=%s",
+            "UPDATE users SET first_name=%s,last_name=%s,birth_date=%s,gender=%s,preferences=%s,bio=%s,city=%s,latitude=%s,longitude=%s,tags=%s,map_visible=COALESCE(%s,map_visible) WHERE id=%s",
             tuple(
                 fields[key]
                 for key in (
@@ -668,6 +668,7 @@ def edit_profile():
                     "latitude",
                     "longitude",
                     "tags",
+                    "map_visible",
                 )
             )
             + (g.uid,),
@@ -839,6 +840,32 @@ def profiles():
         page=filters.page,
         page_size=24,
     )
+
+
+@app.get("/api/v1/map/users")
+@auth
+def map_users():
+    with db() as conn:
+        own = conn.execute(
+            "SELECT id,gender,preferences FROM users WHERE id=%s", (g.uid,)
+        ).fetchone()
+        rows = conn.execute(
+            """SELECT u.id,u.first_name,u.birth_date,u.city,u.latitude,u.longitude,
+               (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id
+               FROM users u
+               WHERE u.id<>%s AND u.verified AND u.map_visible
+               AND u.gender=ANY(%s) AND %s=ANY(u.preferences)
+               AND u.birth_date IS NOT NULL AND u.latitude IS NOT NULL
+               AND u.longitude IS NOT NULL AND u.bio<>'' AND cardinality(u.tags)>0
+               AND NOT EXISTS (SELECT 1 FROM blocks WHERE
+                 (actor=%s AND target=u.id) OR (actor=u.id AND target=%s))
+               ORDER BY u.id LIMIT 500""",
+            (g.uid, own["preferences"], own["gender"], g.uid, g.uid),
+        ).fetchall()
+    today = date.today()
+    for user in rows:
+        user["age"] = age_on(user.pop("birth_date"), today)
+    return jsonify(users=rows)
 
 
 @app.get("/api/v1/profiles/<int:uid>")

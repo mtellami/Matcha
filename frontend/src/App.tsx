@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Compass, Leaf, LogOut, MessageCircle, User } from "lucide-react";
+import {
+  Bell,
+  Compass,
+  Leaf,
+  LogOut,
+  Map as MapIcon,
+  MessageCircle,
+  User,
+} from "lucide-react";
 import { io } from "socket.io-client";
 import {
   startRealtime,
@@ -13,10 +21,11 @@ import { Inbox } from "./features/inbox/Inbox";
 import { ProfileDetail } from "./features/profile/ProfileDetail";
 import { ProfileEditor } from "./features/profile/ProfileEditor";
 import { ProfileCompletion } from "./features/profile/ProfileCompletion";
+import { UserMap } from "./features/map/UserMap";
 import { canDiscover } from "./features/profile/profile-completion";
 import type { Me, Profile, Runner } from "./shared/types";
 
-type View = "discover" | "notifications" | "inbox" | "profile";
+type View = "discover" | "map" | "notifications" | "inbox" | "profile";
 type Summary = { notifications: number; messages: number };
 export default function App() {
   const [me, setMe] = useState<Me | null>(null),
@@ -183,6 +192,7 @@ export default function App() {
     count?: number;
   }[] = [
     { key: "discover", label: "Discover", Icon: Compass },
+    { key: "map", label: "Map", Icon: MapIcon },
     {
       key: "inbox",
       label: "Messages",
@@ -344,6 +354,13 @@ export default function App() {
             </p>
             <ProfileCompletion me={me} edit={editProfile} />
           </>
+        ) : view === "map" ? (
+          <UserMap
+            me={me}
+            openProfile={openProfile}
+            manageLocation={() => navigate("profile")}
+            run={run}
+          />
         ) : (
           <Discovery
             openProfile={openProfile}
