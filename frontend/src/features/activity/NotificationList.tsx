@@ -1,4 +1,11 @@
-import { Eye, Heart, Link, MessageCircle, Unlink } from "lucide-react";
+import {
+  CalendarDays,
+  Eye,
+  Heart,
+  Link,
+  MessageCircle,
+  Unlink,
+} from "lucide-react";
 import type { Notification, Runner } from "../../shared/types";
 
 const events: Record<string, { text: string; Icon: typeof Heart }> = {
@@ -7,6 +14,8 @@ const events: Record<string, { text: string; Icon: typeof Heart }> = {
   match: { text: "connected with you", Icon: Link },
   message: { text: "sent you a message", Icon: MessageCircle },
   disconnect: { text: "removed their interest", Icon: Unlink },
+  date_invite: { text: "invited you to plan a date", Icon: CalendarDays },
+  date_response: { text: "responded to a date plan", Icon: CalendarDays },
 };
 
 export function NotificationList({

@@ -47,6 +47,16 @@ export type MapUser = {
   longitude: number;
   photo_id: number | null;
 };
+export type DatePlan = {
+  id: number;
+  creator: number;
+  invitee: number;
+  title: string;
+  location: string;
+  details: string;
+  starts_at: string;
+  status: "pending" | "accepted" | "declined" | "cancelled";
+};
 export type Notification = {
   id: number;
   actor: number;

@@ -1538,6 +1538,129 @@ summary:focus-visible {
   padding: 2px 6px;
   font-size: 18px;
 }
+.date-planner {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #dce3d5;
+  border-radius: 13px;
+  background: #fcfdf9;
+}
+.date-planner-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+}
+.date-planner-heading p,
+.date-empty,
+.date-error {
+  margin: 5px 0 0;
+  font-size: 13px;
+}
+.date-error {
+  color: #a53127;
+}
+.date-form {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e6dc;
+}
+.date-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.date-form label {
+  display: grid;
+  gap: 5px;
+  color: #34472d;
+  font-size: 12px;
+  font-weight: 600;
+}
+.date-form input,
+.date-form textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #dce3d5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 400;
+}
+.date-form textarea {
+  resize: vertical;
+}
+.date-form > small {
+  color: #748071;
+  font-size: 11px;
+}
+.date-plan-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.date-plan {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e2e6dc;
+  border-radius: 10px;
+  background: #fff;
+}
+.date-plan-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.date-plan-copy > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #66745e;
+  font-size: 12px;
+}
+.date-plan-copy p {
+  margin: 0;
+  font-size: 12px;
+}
+.date-status {
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #65715e;
+  background: #eef2e8;
+  font-size: 11px;
+}
+.date-status.accepted {
+  color: #2d5b38;
+  background: #e4f1dd;
+}
+.date-status.declined,
+.date-status.cancelled {
+  color: #875047;
+  background: #f7ece8;
+}
+.date-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.date-plan-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
 @media (max-width: 600px) {
   .call-panel,
   .call-notice {
@@ -1550,6 +1673,16 @@ summary:focus-visible {
   }
   .user-map {
     min-height: 420px;
+  }
+  .date-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .date-plan {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .date-plan-actions {
+    justify-content: flex-start;
   }
   .photo-edit-card {
     grid-template-columns: 1fr;
