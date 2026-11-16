@@ -1,4 +1,6 @@
 from flask import Blueprint
+import app as services
+
 from app import (
     DUMMY_HASH,
     InvalidHashError,
@@ -45,7 +47,7 @@ def register():
     email = text(d.get("email"), "Email", 254).lower()
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         fail("Enter a valid email", field="email")
-    hashed = app.ph.hash(
+    hashed = services.ph.hash(
         password(
             d.get("password"),
             [
@@ -68,7 +70,7 @@ def register():
             ),
         ).fetchone()
         message = email_token(conn, user, "verify")
-    sent = app.deliver_account_message(message)
+    sent = services.deliver_account_message(message)
     return {
         "message": (
             "Check your email to verify your account"
@@ -91,7 +93,7 @@ def login():
             (text(d.get("username"), "Username", 30).lower(),),
         ).fetchone()
         try:
-            app.ph.verify(
+            services.ph.verify(
                 user["password_hash"] if user else DUMMY_HASH,
                 login_password,
             )
@@ -207,7 +209,7 @@ def reset_request():
         ).fetchone()
         message = email_token(conn, user, "reset") if user else None
     if message:
-        app.deliver_account_message(message)
+        services.deliver_account_message(message)
     return {
         "message": "If the account exists, check your inbox for a reset link. You can request another link if it does not arrive."
     }
@@ -229,7 +231,7 @@ def redeem():
         if not candidate:
             fail("Link expired or already used")
         new_hash = (
-            app.ph.hash(
+            services.ph.hash(
                 password(
                     d.get("password"),
                     [
@@ -243,7 +245,7 @@ def redeem():
             if kind == "reset"
             else None
         )
-        app.lock_account(conn, candidate["user_id"])
+        services.lock_account(conn, candidate["user_id"])
         token = conn.execute(
             "DELETE FROM tokens WHERE token=%s AND kind=%s AND expires_at>clock_timestamp() RETURNING *",
             (hashed_token, kind),
@@ -285,7 +287,7 @@ def redeem():
 @auth
 def logout():
     with db() as conn:
-        app.lock_account(conn, g.uid)
+        services.lock_account(conn, g.uid)
         conn.execute(
             "DELETE FROM sessions WHERE token=%s", (digest(request.cookies["session"]),)
         )
@@ -301,7 +303,7 @@ def change_email():
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", new):
         fail("Enter a valid email", field="email")
     with db() as conn:
-        app.lock_account(conn, g.uid, g.session_token)
+        services.lock_account(conn, g.uid, g.session_token)
         if conn.execute("SELECT 1 FROM users WHERE email=%s", (new,)).fetchone():
             fail("Email unavailable", 409, field="email")
         message = email_token(conn, {"id": g.uid, "email": new}, "email")
@@ -309,7 +311,7 @@ def change_email():
             "UPDATE tokens SET pending_email=%s WHERE user_id=%s AND kind='email'",
             (new, g.uid),
         )
-    if not app.deliver_account_message(message):
+    if not services.deliver_account_message(message):
         fail(
             "Email is temporarily unavailable. Your current address is unchanged; try again shortly.",
             503,
@@ -328,7 +330,7 @@ def verification_request():
         ).fetchone()
         message = email_token(conn, user, "verify") if user else None
     if message:
-        app.deliver_account_message(message)
+        services.deliver_account_message(message)
     return {
         "message": "If your account needs verification, check your inbox for a new link. You can try again if it does not arrive."
     }
