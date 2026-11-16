@@ -9,16 +9,17 @@ from app import db, create_photo, pool
 
 
 def migrate():
+    root = Path(__file__).resolve().parent
     with db() as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS migrations(name text PRIMARY KEY)")
-        for path in sorted(
-            (Path(__file__).resolve().parent / "migrations").glob("*.sql")
-        ):
-            if not conn.execute(
-                "SELECT 1 FROM migrations WHERE name=%s", (path.name,)
-            ).fetchone():
-                conn.execute(path.read_text())
-                conn.execute("INSERT INTO migrations VALUES (%s)", (path.name,))
+        applied = {
+            row["name"]
+            for row in conn.execute("SELECT name FROM migrations").fetchall()
+        }
+        if applied:
+            return
+        conn.execute((root / "schema.sql").read_text())
+        conn.execute("INSERT INTO migrations(name) VALUES (%s)", ("baseline",))
 
 
 def seed():
