@@ -4,6 +4,7 @@ import { api } from "../../shared/api";
 import { nearbyCity, type Location } from "../location/location";
 import type { Me, Runner } from "../../shared/types";
 import { ProfileCompletion } from "./ProfileCompletion";
+import { PhotoGalleryEditor } from "./PhotoGalleryEditor";
 
 export function ProfileEditor({
   fieldErrors,
@@ -387,79 +388,13 @@ export function ProfileEditor({
           Save profile <ArrowUpRight size={18} />
         </button>
       </form>
-      <section
-        className="panel profile-form"
-        id="profile-photos"
-        tabIndex={-1}
-        aria-labelledby="photos-heading"
-      >
-        <h2 id="photos-heading">Your photos</h2>
-        <p>Up to five photos. Choose the picture people see first.</p>
-        <div className="photo-row">
-          {me.photos.map((photo, index) => (
-            <div className="photo-item" key={photo.id}>
-              <img
-                src={"/api/v1/photos/" + photo.id}
-                alt="Your uploaded photo"
-              />
-              {photo.is_primary ? (
-                <span>Profile picture</span>
-              ) : (
-                <button
-                  disabled={busy}
-                  aria-label={`Make photo ${index + 1} your profile picture`}
-                  onClick={() =>
-                    void run(async () => {
-                      await api("/me/photos/" + photo.id, "PUT");
-                      await saved();
-                    })
-                  }
-                >
-                  Make primary
-                </button>
-              )}
-              <button
-                disabled={busy}
-                aria-label={`Remove photo ${index + 1}`}
-                onClick={() =>
-                  void run(async () => {
-                    await api("/me/photos/" + photo.id, "DELETE");
-                    await saved();
-                  })
-                }
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-        <label>
-          Add a photo
-          <input
-            name="photo"
-            aria-invalid={Boolean(fieldErrors.photo)}
-            aria-describedby={fieldErrors.photo ? "form-errors" : undefined}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            disabled={busy || me.photos.length >= 5}
-            onChange={(event) => {
-              const input = event.target,
-                file = input.files?.[0];
-              if (file)
-                void run(async () => {
-                  const form = new FormData();
-                  form.append("photo", file);
-                  try {
-                    await api("/me/photos", "POST", form);
-                    await saved();
-                  } finally {
-                    input.value = "";
-                  }
-                });
-            }}
-          />
-        </label>
-      </section>
+      <PhotoGalleryEditor
+        me={me}
+        fieldErrors={fieldErrors}
+        run={run}
+        saved={saved}
+        busy={busy}
+      />
       <form
         className="panel profile-form"
         onSubmit={(event) => {
