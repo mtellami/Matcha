@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Heart, Leaf, MessageCircle } from "lucide-react";
+import { Heart, Leaf, MessageCircle, Phone, Video } from "lucide-react";
 import { api, ApiError } from "../../shared/api";
 import { messageUpdates, mergeMessages } from "../chat/chat";
 import type { Message, Profile, Runner } from "../../shared/types";
@@ -17,6 +17,7 @@ export function ProfileDetail({
   changed,
   notify,
   busy,
+  startCall,
 }: {
   revision: number;
   person: Profile;
@@ -26,6 +27,7 @@ export function ProfileDetail({
   changed: () => Promise<void>;
   notify: (message: string) => void;
   busy: boolean;
+  startCall: (media: "audio" | "video") => Promise<void>;
 }) {
   const [profile, setProfile] = useState(person),
     [messages, setMessages] = useState<Message[]>([]),
@@ -347,6 +349,27 @@ export function ProfileDetail({
                 <h2>
                   <MessageCircle size={20} /> Your conversation
                 </h2>
+                <div className="call-start-actions">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(() => startCall("audio"))}
+                  >
+                    <Phone size={16} /> Audio call
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(() => startCall("video"))}
+                  >
+                    <Video size={16} /> Video call
+                  </button>
+                  <small>
+                    Your browser will ask for microphone or camera access. Calls
+                    connect peer to peer, so your network address may be visible
+                    to the other caller.
+                  </small>
+                </div>
                 {next && (
                   <button
                     disabled={busy}
