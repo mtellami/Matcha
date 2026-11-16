@@ -5,7 +5,7 @@
 - The code review maps every mandatory feature in Section IV to an implementation; no remaining mandatory product feature gap is currently identified.
 - The app is **implementation-complete but not fully signed off**. Full current browser acceptance and several manual security, location, upload, and configuration checks remain unverified.
 - The remaining items below are acceptance checks, not known missing product features.
-- Bonus implementation is underway. The photo editor, OmniAuth, interactive user map, and audio/video calls are merged; date planning is the current milestone.
+- All five listed bonus features have been implemented. Live provider, map, call, and date-planning acceptance remains pending.
 
 ## Bonus implementation
 
@@ -15,7 +15,7 @@
 | OmniAuth authentication strategies                        | Implemented; merged; provider acceptance pending      |
 | Interactive user map with precise GPS location            | Implemented; merged; browser acceptance pending       |
 | Audio or video chat for connected users                   | Implemented; merged; live-call acceptance pending     |
-| Date and event scheduling for matches                     | In progress                                           |
+| Date and event scheduling for matches                     | Implemented; PR CI passed; live acceptance pending    |
 
 ## Implemented
 
@@ -77,6 +77,7 @@
 - 2026-11-16 bonus milestone started on `feature/bonus-live-calls`: add audio/video calls for online connected users using authenticated Socket.IO signaling.
 - 2026-11-16: audio/video calling PR #4 passed all three CI jobs, was squash-merged as `6a05440`, and its feature branch was deleted. Live device/browser acceptance remains pending.
 - 2026-11-16 bonus milestone started on `feature/bonus-date-planning`: add date and event scheduling for matched users.
+- 2026-11-16: date-planning PR #5 passed all three CI jobs (formatting/lint, frontend build/unit tests, and backend tests). Two-account live acceptance remains pending.
 - 2026-11-16 browser acceptance attempt: all 12 Chromium flows passed, including account email, activity, discovery/profile, and live chat recovery. The full 48-case cross-project run then hit the development API's shared 30-auth-requests-per-IP/15-minute guard in the Chrome project; Firefox and mobile were not completed. Treat cross-browser acceptance as pending, not as an app feature failure.
 
 - Activity milestone: 141 backend scenarios pass on disposable PostgreSQL 17; 28 frontend unit scenarios (six test files) pass, including history recovery after large bursts and removal of stale filtered rows. Production builds pass.
