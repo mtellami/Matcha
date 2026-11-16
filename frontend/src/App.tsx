@@ -22,6 +22,10 @@ import { ProfileDetail } from "./features/profile/ProfileDetail";
 import { ProfileEditor } from "./features/profile/ProfileEditor";
 import { ProfileCompletion } from "./features/profile/ProfileCompletion";
 import { UserMap } from "./features/map/UserMap";
+import {
+  CallManager,
+  type CallManagerHandle,
+} from "./features/calls/CallManager";
 import { canDiscover } from "./features/profile/profile-completion";
 import type { Me, Profile, Runner } from "./shared/types";
 
@@ -50,6 +54,7 @@ export default function App() {
     return { action: params.get("action"), token: params.get("token") };
   });
   const [revision, setRevision] = useState(0);
+  const callManager = useRef<CallManagerHandle | null>(null);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const tabId = useRef(crypto.randomUUID());
   const busy = pending > 0;
@@ -265,6 +270,7 @@ export default function App() {
             Reconnecting… You can keep browsing.
           </p>
         )}
+        {me && <CallManager ref={callManager} />}
         {error && (
           <div className="alert" role="alert" id="form-errors">
             <div>
@@ -319,6 +325,12 @@ export default function App() {
             changed={refreshSummary}
             notify={setNotice}
             busy={busy}
+            startCall={(media) => {
+              const manager = callManager.current;
+              if (!manager)
+                return Promise.reject(new Error("Calling is not available."));
+              return manager.startCall(selected.id, selected.first_name, media);
+            }}
           />
         ) : view === "profile" ? (
           <ProfileEditor
