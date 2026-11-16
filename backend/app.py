@@ -9,6 +9,7 @@ from functools import cmp_to_key, wraps
 from io import BytesIO
 
 import storage
+import requests
 from mailer import account_message, deliver_account_message
 from domain import (
     age_on,
@@ -20,8 +21,17 @@ from domain import (
 )
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, InvalidHashError
-from flask import Flask, g, jsonify, request, send_file
+from flask import (
+    Flask,
+    g,
+    jsonify,
+    redirect,
+    request,
+    send_file,
+    session as oauth_session,
+)
 from flask_socketio import SocketIO, join_room, disconnect
+from authlib.integrations.flask_client import OAuth, OAuthError
 from http import HTTPStatus
 from images import encode_photo
 from psycopg import errors
@@ -33,6 +43,53 @@ from validation import ValidationError, profile_fields
 from locations import LOCATIONS, select_location
 
 app = Flask(__name__)
+oauth_state_secret = os.getenv("OAUTH_STATE_SECRET", "")
+oauth_credentials = {
+    "google": (
+        os.getenv("GOOGLE_CLIENT_ID", ""),
+        os.getenv("GOOGLE_CLIENT_SECRET", ""),
+    ),
+    "github": (
+        os.getenv("GITHUB_CLIENT_ID", ""),
+        os.getenv("GITHUB_CLIENT_SECRET", ""),
+    ),
+}
+for provider, (client_id, client_secret) in oauth_credentials.items():
+    if bool(client_id) != bool(client_secret):
+        raise RuntimeError(f"Configure both {provider.upper()} OAuth credentials")
+    if client_id and (
+        not oauth_state_secret or oauth_state_secret.lower().startswith("replace-with-")
+    ):
+        raise RuntimeError("Set a private OAUTH_STATE_SECRET to enable OAuth")
+app.secret_key = oauth_state_secret or secrets.token_urlsafe(48)
+app.config.update(
+    SESSION_COOKIE_NAME="matcha_oauth_state",
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("COOKIE_SECURE") == "true",
+)
+oauth = OAuth(app)
+OAUTH_PROVIDERS = []
+if oauth_credentials["google"][0]:
+    oauth.register(
+        name="google",
+        client_id=oauth_credentials["google"][0],
+        client_secret=oauth_credentials["google"][1],
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
+    OAUTH_PROVIDERS.append("google")
+if oauth_credentials["github"][0]:
+    oauth.register(
+        name="github",
+        client_id=oauth_credentials["github"][0],
+        client_secret=oauth_credentials["github"][1],
+        authorize_url="https://github.com/login/oauth/authorize",
+        access_token_url="https://github.com/login/oauth/access_token",
+        api_base_url="https://api.github.com/",
+        client_kwargs={"scope": "read:user user:email"},
+    )
+    OAUTH_PROVIDERS.append("github")
 if os.getenv("TRUST_PROXY", "false").lower() == "true":
     from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -249,6 +306,28 @@ def register():
     }, 201
 
 
+def create_login_session(conn, user_id):
+    token = secrets.token_urlsafe(32)
+    csrf = secrets.token_urlsafe(32)
+    conn.execute(
+        "INSERT INTO sessions VALUES(%s,%s,%s,now()+interval '7 days')",
+        (digest(token), user_id, csrf),
+    )
+    return token, csrf
+
+
+def set_login_cookie(response, token):
+    response.set_cookie(
+        "session",
+        token,
+        httponly=True,
+        samesite="Lax",
+        secure=os.getenv("COOKIE_SECURE") == "true",
+        max_age=604800,
+    )
+    return response
+
+
 @app.post("/api/v1/auth/login")
 def login():
     d = data()
@@ -271,25 +350,188 @@ def login():
             fail("Invalid username or password", 401)
         if not user["verified"]:
             fail("Verify your email before signing in", 403)
-        token = secrets.token_urlsafe(32)
-        csrf = secrets.token_urlsafe(32)
-        conn.execute(
-            "INSERT INTO sessions VALUES(%s,%s,%s,now()+interval '7 days')",
-            (digest(token), user["id"], csrf),
-        )
+        token, csrf = create_login_session(conn, user["id"])
     response = jsonify(csrf=csrf)
-    response.set_cookie(
-        "session",
-        token,
-        httponly=True,
-        samesite="Lax",
-        secure=os.getenv("COOKIE_SECURE") == "true",
-        max_age=604800,
-    )
-    return response
+    return set_login_cookie(response, token)
 
 
 DUMMY_HASH = ph.hash(secrets.token_urlsafe(32))
+
+
+class OAuthAccountExists(Exception):
+    pass
+
+
+class OAuthSignInError(Exception):
+    pass
+
+
+def oauth_failure(reason="failed"):
+    origin = os.getenv("APP_ORIGIN", "http://localhost:8080").rstrip("/")
+    return redirect(f"{origin}/?oauth_error={reason}")
+
+
+def oauth_redirect_uri(provider):
+    origin = os.getenv("APP_ORIGIN", "http://localhost:8080").rstrip("/")
+    return f"{origin}/api/v1/auth/{provider}/callback"
+
+
+def oauth_name(value, fallback):
+    return value.strip()[:80] if isinstance(value, str) and value.strip() else fallback
+
+
+def oauth_user(provider, subject, email, first_name, last_name):
+    if (
+        not isinstance(subject, str)
+        or not subject
+        or len(subject) > 255
+        or not isinstance(email, str)
+    ):
+        raise OAuthSignInError("Provider did not return a usable identity")
+    email = email.strip().lower()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        raise OAuthSignInError("Provider did not return a verified email")
+
+    with db() as conn:
+        lock_keys = sorted((f"email:{email}", f"oauth:{provider}:{subject}"))
+        for key in lock_keys:
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (key,)
+            )
+        existing = conn.execute(
+            """SELECT u.id FROM oauth_identities i
+               JOIN users u ON u.id=i.user_id
+               WHERE i.provider=%s AND i.subject=%s FOR UPDATE OF u""",
+            (provider, subject),
+        ).fetchone()
+        if existing:
+            return existing["id"]
+
+        if conn.execute("SELECT 1 FROM users WHERE email=%s", (email,)).fetchone():
+            # Do not silently attach a new provider to an existing password account.
+            raise OAuthAccountExists()
+
+        first_name = oauth_name(first_name, "Matcha")
+        last_name = oauth_name(last_name, "Member")
+        base = re.sub(r"[^a-z0-9_]", "_", email.split("@", 1)[0].lower())
+        base = base.strip("_")[:22]
+        if len(base) < 3:
+            base = "matcha"
+        user = None
+        for _ in range(20):
+            username = f"{base}_{secrets.token_hex(3)}"
+            user = conn.execute(
+                """INSERT INTO users(email,username,first_name,last_name,password_hash,verified)
+                   VALUES(%s,%s,%s,%s,%s,true)
+                   ON CONFLICT(username) DO NOTHING RETURNING id""",
+                (
+                    email,
+                    username,
+                    first_name,
+                    last_name,
+                    ph.hash(secrets.token_urlsafe(48)),
+                ),
+            ).fetchone()
+            if user:
+                break
+        if not user:
+            raise OAuthSignInError("Could not create a Matcha account")
+        conn.execute(
+            "INSERT INTO oauth_identities(provider,subject,user_id) VALUES(%s,%s,%s)",
+            (provider, subject, user["id"]),
+        )
+        return user["id"]
+
+
+@app.get("/api/v1/auth/providers")
+def auth_providers():
+    return {"providers": OAUTH_PROVIDERS}
+
+
+@app.get("/api/v1/auth/<provider>")
+def oauth_start(provider):
+    if provider not in OAUTH_PROVIDERS:
+        fail("This sign-in provider is not configured", 404)
+    client = oauth.create_client(provider)
+    return client.authorize_redirect(oauth_redirect_uri(provider))
+
+
+@app.get("/api/v1/auth/<provider>/callback")
+def oauth_callback(provider):
+    if provider not in OAUTH_PROVIDERS:
+        return oauth_failure("unavailable")
+    client = oauth.create_client(provider)
+    try:
+        token = client.authorize_access_token()
+        if provider == "google":
+            profile = token.get("userinfo")
+            email = profile.get("email") if isinstance(profile, dict) else None
+            domain = email.rsplit("@", 1)[-1].lower() if isinstance(email, str) else ""
+            trusted_domain = isinstance(profile, dict) and (
+                domain == "gmail.com" or profile.get("hd") == domain
+            )
+            if (
+                not isinstance(profile, dict)
+                or profile.get("email_verified") is not True
+                or not trusted_domain
+            ):
+                raise OAuthSignInError("Google did not verify this email")
+            subject = profile.get("sub")
+            first_name = profile.get("given_name") or profile.get("name")
+            last_name = profile.get("family_name")
+        else:
+            response = client.get("user")
+            response.raise_for_status()
+            profile = response.json()
+            if not isinstance(profile, dict):
+                raise OAuthSignInError("GitHub did not return a usable profile")
+            github_id = profile.get("id")
+            subject = str(github_id) if isinstance(github_id, int) else ""
+            email_response = client.get("user/emails")
+            email_response.raise_for_status()
+            email_data = email_response.json()
+            if not isinstance(email_data, list):
+                raise OAuthSignInError("GitHub did not return usable email data")
+            verified_emails = [
+                item
+                for item in email_data
+                if isinstance(item, dict) and item.get("verified") is True
+            ]
+            email_item = next(
+                (item for item in verified_emails if item.get("primary")),
+                verified_emails[0] if verified_emails else None,
+            )
+            if not email_item:
+                raise OAuthSignInError("GitHub did not return a verified email")
+            email = email_item.get("email")
+            full_name = oauth_name(
+                profile.get("name"), profile.get("login") or "Matcha member"
+            )
+            name_parts = full_name.split(maxsplit=1)
+            first_name = name_parts[0] if name_parts else None
+            last_name = name_parts[1] if len(name_parts) > 1 else None
+
+        oauth_session.clear()
+        user_id = oauth_user(provider, subject, email, first_name, last_name)
+        with db() as conn:
+            token_value, _ = create_login_session(conn, user_id)
+        origin = os.getenv("APP_ORIGIN", "http://localhost:8080").rstrip("/")
+        return set_login_cookie(redirect(f"{origin}/"), token_value)
+    except OAuthAccountExists:
+        oauth_session.clear()
+        return oauth_failure("account_exists")
+    except (
+        OAuthError,
+        requests.RequestException,
+        OAuthSignInError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+    ) as exc:
+        oauth_session.clear()
+        app.logger.info("OAuth sign-in failed (%s)", type(exc).__name__)
+        return oauth_failure()
 
 
 @app.post("/api/v1/auth/reset-request")
