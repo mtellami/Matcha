@@ -21,9 +21,16 @@ Open the app at [http://localhost:8080](http://localhost:8080). The development 
 flowchart LR
     Person[Browser] --> Web[React app served by Nginx]
     Web -->|API and Socket.IO| API[Flask backend]
-    API --> DB[(PostgreSQL)]
-    API --> Objects[(S3-compatible photo storage)]
-    API --> Mail[SMTP email]
+    subgraph Frontend
+        Web --> Features[Feature-based React modules]
+    end
+    subgraph Backend
+        API --> Routes[Flask blueprints]
+        Routes --> Services[Shared application services]
+    end
+    Services --> DB[(PostgreSQL)]
+    Services --> Objects[(S3-compatible photo storage)]
+    Services --> Mail[SMTP email]
     Local[Development services] -. provides .-> Objects
     Local -. provides .-> Mail
 ```
