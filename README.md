@@ -14,7 +14,8 @@ make dev-seed  # Optional: add demo profiles
 ```
 
 `make dev` starts only PostgreSQL, RustFS, and Mailpit. Run the app processes
-in separate terminals with `make backend-dev` and `make frontend-dev`.
+in separate terminals with `make backend-dev` and `make frontend-dev`. The
+frontend target installs its locked dependencies with pnpm before starting Vite.
 
 Open the app at [http://localhost:8080](http://localhost:8080). The development inbox is at [http://localhost:8025](http://localhost:8025).
 
