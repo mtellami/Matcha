@@ -1,3 +1,5 @@
+import { UiInput, UiTextarea } from "../../shared/UiInput";
+import { UiButton } from "../../shared/UiButton";
 import { useEffect, useRef, useState } from "react";
 import { Bell, Eye } from "lucide-react";
 import { api } from "../../shared/api";
@@ -204,15 +206,21 @@ export function Activity({
 
   return (
     <>
-      <div className="eyebrow">YOUR CONNECTIONS</div>
-      <h1>
+      <div className="eyebrow [font-size:10px] [font-weight:700] [letter-spacing:2.3px] [color:var(--accent)] [display:flex] [align-items:center] [gap:8px]">
+        YOUR CONNECTIONS
+      </div>
+      <h1 className="my-5 text-[clamp(2.5rem,5vw,4rem)] font-medium leading-[1.12] tracking-[-2px]">
         A little interest
         <br />
         goes a long way.
       </h1>
-      <div className="tabs" role="tablist" aria-label="Activity type">
+      <div
+        className="tabs [display:flex] [gap:8px] [flex-wrap:wrap] max-[650px]:[&_button]:[font-size:11px]"
+        role="tablist"
+        aria-label="Activity type"
+      >
         {tabs.map(([key, label], index) => (
-          <button
+          <UiButton
             role="tab"
             id={`activity-tab-${key}`}
             aria-controls="activity-panel"
@@ -244,10 +252,14 @@ export function Activity({
             }}
           >
             {label}
-          </button>
+          </UiButton>
         ))}
       </div>
-      <p className="sr-only" role="status" aria-live="polite">
+      <p
+        className="sr-only [position:absolute] [width:1px] [height:1px] [padding:0] [margin:-1px] [overflow:hidden] [clip:rect(0,_0,_0,_0)] [white-space:nowrap] [border:0]"
+        role="status"
+        aria-live="polite"
+      >
         {announcement}
       </p>
       <div
@@ -255,14 +267,14 @@ export function Activity({
         id="activity-panel"
         aria-labelledby={`activity-tab-${tab}`}
       >
-        <div className="actions activity-controls">
-          <button disabled={loading || busy} onClick={reload}>
+        <div className="actions activity-controls [display:flex] [gap:10px] [flex-wrap:wrap] [margin-top:25px] [align-items:center] max-[650px]:[gap:6px] max-[650px]:[&__>button]:[font-size:12px]">
+          <UiButton disabled={loading || busy} onClick={reload}>
             Refresh
-          </button>
+          </UiButton>
           {tab === "notifications" && (
             <>
-              <label className="unread-toggle">
-                <input
+              <label className="unread-toggle [display:flex] [align-items:center] [gap:8px] [font-size:13px] [cursor:pointer] [padding:10px] [&_input]:[width:16px] [&_input]:[height:16px] [&_input]:[padding:0] [&_input]:[accent-color:var(--accent)]">
+                <UiInput
                   type="checkbox"
                   checked={unreadOnly}
                   disabled={busy}
@@ -277,25 +289,28 @@ export function Activity({
                 />{" "}
                 Unread only
               </label>
-              <button
+              <UiButton
                 disabled={
                   busy || loading || !notifications.some((n) => !n.is_read)
                 }
                 onClick={() => void run(markAllRead)}
               >
                 Mark all read
-              </button>
+              </UiButton>
             </>
           )}
         </div>
         {error && (
-          <p className="alert" role="alert">
+          <p
+            className="mb-6 flex justify-between rounded-lg bg-[var(--danger-bg)] p-[15px] text-[var(--danger-text)]"
+            role="alert"
+          >
             {error} Your activity will refresh automatically.
           </p>
         )}
         {loading && <p role="status">Loading your activity…</p>}
         {!loading && (
-          <div className="activity">
+          <div className="activity [display:flex] [flex-direction:column] [gap:10px] [margin-top:30px] [&_button]:[display:flex] [&_button]:[align-items:center] [&_button]:[gap:18px] [&_button]:[text-align:left] [&_button]:[padding:20px] [&_small]:[margin-left:auto] [&_small]:[color:var(--muted)] max-[600px]:[&_button]:[flex-wrap:wrap] max-[600px]:[&_small]:[margin:0] [&_button_>span]:[overflow-wrap:anywhere] [&_button_>span]:[min-width:0] [&_.badge]:[margin-left:auto]">
             {tab === "notifications" && (
               <>
                 <NotificationList
@@ -309,7 +324,7 @@ export function Activity({
                   }}
                 />
                 {!notifications.length && !error && (
-                  <div className="empty">
+                  <div className="empty [text-align:center] [padding:50px] [background:var(--accent-soft)] [border-radius:15px] [color:var(--muted)]">
                     <Bell size={32} />
                     <h2>
                       {unreadOnly
@@ -324,19 +339,19 @@ export function Activity({
                   </div>
                 )}
                 {next && (
-                  <button
+                  <UiButton
                     disabled={busy}
                     onClick={() => void run(olderNotifications)}
                   >
                     Older notifications
-                  </button>
+                  </UiButton>
                 )}
               </>
             )}
             {tab === "visitors" && (
               <>
                 {visitors.map((item) => (
-                  <button
+                  <UiButton
                     key={item.id}
                     onClick={() => void run(() => openProfile(item.actor))}
                   >
@@ -349,16 +364,16 @@ export function Activity({
                         {new Date(item.created_at).toLocaleString()}
                       </time>
                     </small>
-                  </button>
+                  </UiButton>
                 ))}
                 {!visitors.length && !error && <p>No visitors yet.</p>}
                 {activity?.next_before && (
-                  <button
+                  <UiButton
                     disabled={busy}
                     onClick={() => void run(olderVisitors)}
                   >
                     Older visits
-                  </button>
+                  </UiButton>
                 )}
               </>
             )}
@@ -377,9 +392,12 @@ export function Activity({
             {tab === "blocks" && (
               <>
                 {blocks.map((item) => (
-                  <div className="blocked-row" key={item.actor}>
+                  <div
+                    className="blocked-row [display:flex] [align-items:center] [justify-content:space-between] [padding:18px] [border:1px_solid_var(--border)] [background:var(--surface)] [border-radius:10px]"
+                    key={item.actor}
+                  >
                     <strong>{item.username}</strong>
-                    <button
+                    <UiButton
                       disabled={busy}
                       onClick={() =>
                         void run(async () => {
@@ -390,7 +408,7 @@ export function Activity({
                       }
                     >
                       Unblock
-                    </button>
+                    </UiButton>
                   </div>
                 ))}
                 {!blocks.length && !error && <p>No blocked users.</p>}

@@ -1,18 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { UiInput, UiTextarea } from "../../shared/UiInput";
+import { UiButton } from "../../shared/UiButton";
+import { Dropdown, Tooltip } from "@heroui/react";
+import { useEffect, useState } from "react";
 import {
+  Ban,
   CalendarDays,
   Check,
+  ChevronLeft,
+  Eye,
+  Flag,
   Heart,
   Leaf,
   MapPin,
   MessageCircle,
+  MoreHorizontal,
   Phone,
+  Star,
   Video,
   X,
 } from "lucide-react";
 import { api, ApiError } from "../../shared/api";
-import { messageUpdates, mergeMessages } from "../chat/chat";
-import type { DatePlan, Message, Profile, Runner } from "../../shared/types";
+import type { DatePlan, Profile, Runner } from "../../shared/types";
 
 function localDateTime(value: Date) {
   return new Date(value.getTime() - value.getTimezoneOffset() * 60_000)
@@ -34,6 +42,7 @@ export function ProfileDetail({
   notify,
   busy,
   startCall,
+  openMessage,
 }: {
   revision: number;
   person: Profile;
@@ -44,84 +53,16 @@ export function ProfileDetail({
   notify: (message: string) => void;
   busy: boolean;
   startCall: (media: "audio" | "video") => Promise<void>;
+  openMessage: (id: number) => void;
 }) {
   const [profile, setProfile] = useState(person),
-    [messages, setMessages] = useState<Message[]>([]),
-    [next, setNext] = useState<number | null>(null),
     [error, setError] = useState(""),
     [unavailable, setUnavailable] = useState(false),
     [activePhoto, setActivePhoto] = useState(person.photos?.[0]?.id);
-  const [draft, setDraft] = useState("");
   const [datePlans, setDatePlans] = useState<DatePlan[]>([]);
   const [dateError, setDateError] = useState("");
   const [datesLoading, setDatesLoading] = useState(false);
   const ownProfile = person.id === myId;
-  const [visibleMessage, setVisibleMessage] = useState<number | null>(null);
-  const bottom = useRef<HTMLDivElement>(null),
-    readMarker = useRef<HTMLElement>(null),
-    messageKey = useRef<{ body: string; key: string } | null>(null);
-  const lastId = messages.at(-1)?.id;
-  const bottomVisible = lastId !== undefined && visibleMessage === lastId;
-  const historyInitialized = useRef(false);
-  const latestCursor = useRef<number | null>(null);
-  const acknowledgedThrough = useRef<number | null>(null);
-  const pollNow = useRef<() => Promise<void>>(async () => {});
-  const atBottom = useRef(false);
-  atBottom.current = bottomVisible;
-  const [visible, setVisible] = useState(
-    document.visibilityState === "visible",
-  );
-  useEffect(() => {
-    const update = () => setVisible(document.visibilityState === "visible");
-    document.addEventListener("visibilitychange", update);
-    return () => document.removeEventListener("visibilitychange", update);
-  }, []);
-  useEffect(() => {
-    if (!readMarker.current || !lastId) return;
-    const observer = new IntersectionObserver(
-      (entries) =>
-        setVisibleMessage(
-          entries[0].isIntersecting && entries[0].intersectionRatio >= 1
-            ? lastId
-            : null,
-        ),
-      { threshold: 1 },
-    );
-    observer.observe(readMarker.current);
-    return () => observer.disconnect();
-  }, [profile.connected, lastId]);
-  useEffect(() => {
-    if (!lastId || !bottomVisible || !profile.connected || !visible) return;
-    let active = true,
-      inFlight = false;
-    async function acknowledge() {
-      if (inFlight || acknowledgedThrough.current === lastId) return;
-      inFlight = true;
-      try {
-        await api(
-          `/conversations/${person.id}/read`,
-          "POST",
-          { through_id: lastId },
-          undefined,
-          4000,
-        );
-        if (active) {
-          acknowledgedThrough.current = lastId ?? null;
-          await changed();
-        }
-      } catch {
-        // Retry while the last message is still visible after a transient failure.
-      } finally {
-        inFlight = false;
-      }
-    }
-    void acknowledge();
-    const timer = setInterval(acknowledge, 5000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [lastId, bottomVisible, profile.connected, person.id, changed, visible]);
   useEffect(() => {
     if (ownProfile) return;
     let active = true,
@@ -145,40 +86,12 @@ export function ProfileDetail({
         if (!active) return;
         setProfile((current) => ({ ...current, ...status }));
         setError("");
-        if (!status.connected) {
-          setMessages([]);
-          setNext(null);
-          historyInitialized.current = false;
-          latestCursor.current = null;
-          return;
-        }
-        const first = !historyInitialized.current;
-        const response = await messageUpdates(
-          person.id,
-          latestCursor.current,
-          controller.signal,
-        );
-        if (!active) return;
-        setMessages((current) => mergeMessages(current, response.messages));
-        latestCursor.current = response.latest;
-        if (first) {
-          setNext(response.next_before);
-          historyInitialized.current = true;
-        }
-        if (first || (response.messages.length && atBottom.current))
-          setTimeout(
-            () => bottom.current?.scrollIntoView({ block: "nearest" }),
-            0,
-          );
       } catch (e) {
         if (active) {
           setError((e as Error).message);
           if (e instanceof ApiError && [401, 403, 404].includes(e.status)) {
             setUnavailable(e.status === 404);
             setProfile((p) => ({ ...p, connected: false }));
-            setMessages([]);
-            historyInitialized.current = false;
-            latestCursor.current = null;
           }
         }
       } finally {
@@ -189,19 +102,14 @@ export function ProfileDetail({
         }
       }
     }
-    pollNow.current = poll;
     void poll();
     const timer = setInterval(poll, 5000);
     return () => {
       active = false;
       controller.abort();
       clearInterval(timer);
-      pollNow.current = async () => {};
     };
   }, [person.id, ownProfile]);
-  useEffect(() => {
-    void pollNow.current();
-  }, [revision]);
   useEffect(() => {
     if (!profile.connected) {
       setDatePlans([]);
@@ -271,197 +179,323 @@ export function ProfileDetail({
     setProfile((current) => ({ ...current, ...status }));
     await changed();
   }
-  async function send() {
-    const body = draft.trim();
-    if (!body) return;
-    if (messageKey.current?.body !== body)
-      messageKey.current = { body, key: crypto.randomUUID() };
-    await api(
-      `/conversations/${person.id}/messages`,
-      "POST",
-      {
-        body,
-        client_id: messageKey.current.key,
-      },
-      undefined,
-      8000,
-    );
-    setDraft("");
-    messageKey.current = null;
-    await pollNow.current();
-    setTimeout(
-      () =>
-        bottom.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-        }),
-      0,
-    );
-    await changed();
-  }
   return (
     <>
-      <button className="back" onClick={back}>
-        {ownProfile ? "← Back to editing" : "← Back"}
-      </button>
-      {ownProfile && (
-        <p className="preview-note">
-          Your public profile · This is what other members can see. Save changes
-          in your profile editor before previewing.
-        </p>
-      )}
+      <div
+        className={
+          ownProfile
+            ? "mb-8 grid items-center gap-4 sm:grid-cols-[auto_minmax(0,1fr)]"
+            : "mb-6"
+        }
+      >
+        <UiButton
+          className="min-h-10 justify-self-start rounded-full border-transparent bg-transparent px-2 text-matcha-text hover:bg-matcha-raised"
+          onClick={back}
+        >
+          <ChevronLeft size={18} aria-hidden="true" />
+          <span>Back</span>
+        </UiButton>
+        {ownProfile && (
+          <div className="flex min-h-14 items-center gap-3 rounded-2xl bg-matcha-accent/10 px-5 py-3 text-sm text-matcha-muted">
+            <Eye
+              size={19}
+              className="shrink-0 text-matcha-accent"
+              aria-hidden="true"
+            />
+            <p className="m-0">
+              <strong className="font-semibold text-matcha-text">
+                Preview.
+              </strong>{" "}
+              This is how other members see your profile. Save your changes
+              first.
+            </p>
+          </div>
+        )}
+      </div>
       {error && (
-        <p className="alert" role="alert">
+        <p
+          className="mb-6 flex justify-between rounded-lg bg-[var(--danger-bg)] p-[15px] text-[var(--danger-text)]"
+          role="alert"
+        >
           {error}
         </p>
       )}
       {!unavailable && (
-        <section className="detail">
-          <div>
-            <div className="portrait">
+        <section className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,.98fr)] lg:gap-12">
+          <div className="min-w-0">
+            <div className="relative mx-auto aspect-[4/5] w-full max-w-[560px] overflow-hidden rounded-[28px] bg-[var(--avatar-bg)] text-matcha-accent shadow-[0_24px_64px_var(--shadow)]">
               {activePhoto ? (
                 <img
+                  className="absolute inset-0 size-full object-cover"
                   src={"/api/v1/photos/" + activePhoto}
                   alt={`${profile.first_name}’s profile photo`}
                 />
               ) : (
-                <Leaf size={100} />
+                <div className="grid size-full place-items-center">
+                  <Leaf size={100} />
+                </div>
               )}
             </div>
             {(profile.photos?.length || 0) > 1 && (
-              <div className="photo-row gallery">
+              <div className="mx-auto mt-4 flex w-full max-w-[560px] flex-wrap gap-2.5">
                 {profile.photos?.map((photo, index) => (
                   <button
+                    type="button"
                     aria-label={`View ${profile.first_name}’s photo ${index + 1} of ${profile.photos?.length}`}
                     aria-pressed={activePhoto === photo.id}
                     key={photo.id}
                     onClick={() => setActivePhoto(photo.id)}
+                    className={`relative block size-[76px] shrink-0 overflow-hidden rounded-2xl border-2 bg-matcha-surface p-0 transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-matcha-accent ${activePhoto === photo.id ? "border-matcha-accent" : "border-transparent opacity-75 hover:opacity-100"}`}
                   >
-                    <img src={"/api/v1/photos/" + photo.id} alt="" />
+                    <img
+                      className="absolute inset-0 block size-full object-cover"
+                      src={"/api/v1/photos/" + photo.id}
+                      alt=""
+                    />
                   </button>
                 ))}
               </div>
             )}
           </div>
-          <div>
-            <div className="eyebrow">
-              {profile.city} · FAME {profile.fame}
+          <div className="min-w-0 lg:pt-2">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-matcha-muted">
+              {profile.city && (
+                <span className="inline-flex items-center gap-2">
+                  <MapPin size={17} className="text-matcha-accent" />
+                  {profile.city}
+                </span>
+              )}
+              <span
+                className={
+                  profile.online
+                    ? "inline-flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300"
+                    : "inline-flex items-center gap-2 text-matcha-muted"
+                }
+                role="status"
+                aria-live="polite"
+              >
+                <span
+                  className={
+                    profile.online
+                      ? "size-2 rounded-full bg-emerald-500"
+                      : "size-2 rounded-full bg-matcha-muted/50"
+                  }
+                />
+                {profile.online
+                  ? "Online now"
+                  : profile.last_seen
+                    ? "Last seen " +
+                      new Date(profile.last_seen).toLocaleDateString()
+                    : "Offline"}
+              </span>
             </div>
-            <h1>
+            <h1 className="mb-5 mt-5 text-[clamp(3rem,6vw,5rem)] font-semibold leading-[1.02] tracking-[-.055em]">
               {profile.first_name}
-              {profile.age !== null && ", " + profile.age}
+              {profile.age !== null && (
+                <span className="font-serif font-normal italic text-matcha-accent">
+                  , {profile.age}
+                </span>
+              )}
             </h1>
-            <p className="presence" role="status" aria-live="polite">
-              {profile.online
-                ? "● Online now"
-                : profile.last_seen
-                  ? "Last connected " +
-                    new Date(profile.last_seen).toLocaleString()
-                  : "Offline"}
-            </p>
-            <p>
-              {profile.gender} · Interested in {profile.preferences.join(", ")}
-            </p>
-            <p className="biography">{profile.bio}</p>
-            <div className="tags">
-              {profile.tags.map((tag) => (
-                <span key={tag}>#{tag}</span>
+            <div className="flex flex-wrap gap-2">
+              {profile.gender && (
+                <span className="rounded-full bg-matcha-accent/10 px-4 py-2 text-sm font-medium text-matcha-text">
+                  {profile.gender}
+                </span>
+              )}
+              {profile.preferences.map((preference) => (
+                <span
+                  key={preference}
+                  className="rounded-full bg-matcha-accent/10 px-4 py-2 text-sm font-medium text-matcha-text"
+                >
+                  Interested in {preference.toLowerCase()}
+                </span>
               ))}
             </div>
-            {!ownProfile && (
-              <p>
-                {profile.connected
-                  ? "You’re connected ✨"
-                  : profile.likes_you
-                    ? "They’re interested in you"
-                    : ""}
+            {!ownProfile && profile.likes_you && !profile.connected && (
+              <p className="mb-0 mt-3 text-sm text-matcha-accent">
+                They’re interested in you
               </p>
             )}
             {!ownProfile && (
-              <div className="actions">
-                <button
-                  className="primary"
+              <div className="mt-7 flex flex-wrap items-center gap-3">
+                <UiButton
+                  className="min-h-[54px] min-w-[132px] rounded-2xl !border-matcha-accent !bg-matcha-accent px-6 font-semibold !text-matcha-bg hover:!bg-matcha-accent/90"
                   disabled={busy}
                   onClick={() => void run(relationship)}
                 >
                   <Heart size={18} />
-                  {profile.liked ? "Remove interest" : "I’m interested"}
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async () => {
-                      await api(`/profiles/${person.id}/block`, "POST");
-                      await changed();
-                      back();
-                    })
-                  }
-                >
-                  Block
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async () => {
-                      await api(`/profiles/${person.id}/reports`, "POST", {
-                        reason: "Suspected fake account",
-                      });
-                      notify("Your report has been received. Thank you.");
-                    })
-                  }
-                >
-                  Report fake
-                </button>
+                  {profile.liked ? "Remove interest" : "Like"}
+                </UiButton>
+                {profile.connected ? (
+                  <UiButton
+                    className="min-h-[54px] min-w-[132px] rounded-2xl px-6 font-semibold"
+                    onClick={() => openMessage(person.id)}
+                  >
+                    <MessageCircle size={18} />
+                    Message
+                  </UiButton>
+                ) : (
+                  <Tooltip>
+                    <Tooltip.Trigger>
+                      <span tabIndex={0}>
+                        <UiButton
+                          className="min-h-[54px] min-w-[132px] rounded-2xl px-6 font-semibold"
+                          disabled
+                        >
+                          <MessageCircle size={18} />
+                          Message
+                        </UiButton>
+                      </span>
+                    </Tooltip.Trigger>
+                    <Tooltip.Content>
+                      Like each other to connect. Messaging is available after
+                      you connect.
+                    </Tooltip.Content>
+                  </Tooltip>
+                )}
+                <Dropdown>
+                  <Dropdown.Trigger
+                    aria-label="More profile actions"
+                    className="grid size-[54px] shrink-0 place-items-center rounded-2xl border border-matcha-border bg-matcha-surface text-matcha-text hover:bg-matcha-raised"
+                  >
+                    <MoreHorizontal size={21} />
+                  </Dropdown.Trigger>
+                  <Dropdown.Popover placement="bottom end">
+                    <Dropdown.Menu
+                      className="min-w-48 p-1.5"
+                      onAction={(action) => {
+                        if (action === "block") {
+                          void run(async () => {
+                            await api(`/profiles/${person.id}/block`, "POST");
+                            await changed();
+                            back();
+                          });
+                        }
+                        if (action === "report") {
+                          void run(async () => {
+                            await api(
+                              `/profiles/${person.id}/reports`,
+                              "POST",
+                              { reason: "Suspected fake account" },
+                            );
+                            notify("Your report has been received. Thank you.");
+                          });
+                        }
+                      }}
+                    >
+                      <Dropdown.Item
+                        id="block"
+                        className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
+                      >
+                        <Ban size={17} /> Block
+                      </Dropdown.Item>
+                      <Dropdown.Item
+                        id="report"
+                        className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
+                      >
+                        <Flag size={17} /> Report fake
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
               </div>
             )}
-            {profile.connected && (
-              <section className="chat">
-                <h2>
-                  <MessageCircle size={20} /> Your conversation
+            <div className="mt-8 border-t border-matcha-border pt-6">
+              <h2 className="m-0 text-xs font-bold uppercase tracking-[2px] text-matcha-muted">
+                About
+              </h2>
+              <p className="mb-0 mt-3 whitespace-pre-wrap break-words text-lg leading-relaxed text-matcha-text">
+                {profile.bio || "This person hasn’t added a bio yet."}
+              </p>
+            </div>
+            {profile.tags.length > 0 && (
+              <div className="mt-7">
+                <h2 className="m-0 text-xs font-bold uppercase tracking-[2px] text-matcha-muted">
+                  Interests
                 </h2>
-                <div className="call-start-actions">
-                  <button
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {profile.tags.map((tag) => (
+                    <span
+                      className="rounded-full border border-matcha-border bg-matcha-accent/5 px-4 py-2 text-sm font-semibold text-matcha-accent"
+                      key={tag}
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="mt-7 inline-flex items-center gap-3 rounded-2xl border border-matcha-border bg-matcha-surface px-4 py-3">
+              <span className="grid size-11 place-items-center rounded-xl bg-matcha-accent/10 text-matcha-accent">
+                <Star size={21} />
+              </span>
+              <span>
+                <span className="block text-xs text-matcha-muted">
+                  Fame rating
+                </span>
+                <strong className="block text-xl leading-tight text-matcha-text">
+                  {profile.fame}
+                </strong>
+              </span>
+            </div>
+            {profile.connected && (
+              <section
+                id="profile-conversation"
+                className="chat mt-10 scroll-mt-32 border-t border-matcha-border pt-6"
+              >
+                <h2 className="m-0 text-xl">Stay connected</h2>
+                <div className="my-3 flex flex-wrap items-center gap-2">
+                  <UiButton
                     type="button"
                     disabled={busy}
                     onClick={() => void run(() => startCall("audio"))}
                   >
                     <Phone size={16} /> Audio call
-                  </button>
-                  <button
+                  </UiButton>
+                  <UiButton
                     type="button"
                     disabled={busy}
                     onClick={() => void run(() => startCall("video"))}
                   >
                     <Video size={16} /> Video call
-                  </button>
-                  <small>
+                  </UiButton>
+                  <small className="basis-full text-xs leading-relaxed text-matcha-muted">
                     Your browser will ask for microphone or camera access. Calls
                     connect peer to peer, so your network address may be visible
                     to the other caller.
                   </small>
                 </div>
                 <section
-                  className="date-planner"
+                  className="my-5 grid min-w-0 gap-4 rounded-2xl border border-matcha-border bg-matcha-surface p-4 sm:p-5"
                   aria-labelledby="date-planner-title"
                 >
-                  <div className="date-planner-heading">
-                    <h3 id="date-planner-title">
+                  <div>
+                    <h3
+                      id="date-planner-title"
+                      className="m-0 flex items-center gap-2 text-lg font-semibold"
+                    >
                       <CalendarDays size={19} /> Plan a date
                     </h3>
-                    <p>
+                    <p className="mb-0 mt-1 text-sm leading-relaxed">
                       Pick a place and time together. Only this connection can
                       see the plan.
                     </p>
                   </div>
                   {dateError && (
-                    <p className="date-error" role="alert">
+                    <p
+                      className="m-0 text-sm text-[var(--danger-text)]"
+                      role="alert"
+                    >
                       {dateError}
                     </p>
                   )}
                   {datesLoading ? (
-                    <p role="status">Loading date plans…</p>
+                    <p className="m-0 text-sm text-matcha-muted" role="status">
+                      Loading date plans…
+                    </p>
                   ) : datePlans.length > 0 ? (
-                    <ul className="date-plan-list">
+                    <ul className="m-0 grid min-w-0 list-none gap-2 p-0">
                       {datePlans.map((plan) => {
                         const statusLabel =
                           plan.status === "pending"
@@ -474,32 +508,44 @@ export function ProfileDetail({
                                 ? "Declined"
                                 : "Cancelled";
                         return (
-                          <li className="date-plan" key={plan.id}>
-                            <div className="date-plan-copy">
-                              <strong>{plan.title}</strong>
-                              <span>
+                          <li
+                            className="flex min-w-0 flex-col gap-3 rounded-xl border border-matcha-border bg-matcha-bg p-3 sm:flex-row sm:items-center sm:justify-between"
+                            key={plan.id}
+                          >
+                            <div className="grid min-w-0 gap-1.5">
+                              <strong className="break-words text-sm font-semibold text-matcha-text">
+                                {plan.title}
+                              </strong>
+                              <span className="flex items-center gap-1.5 text-xs text-matcha-muted">
                                 <CalendarDays size={14} />
                                 {new Date(plan.starts_at).toLocaleString([], {
                                   dateStyle: "medium",
                                   timeStyle: "short",
                                 })}
                               </span>
-                              <span>
+                              <span className="flex items-center gap-1.5 text-xs text-matcha-muted">
                                 <MapPin size={14} /> {plan.location}
                               </span>
-                              {plan.details && <p>{plan.details}</p>}
-                              <small className={`date-status ${plan.status}`}>
+                              {plan.details && (
+                                <p className="m-0 break-words text-xs leading-relaxed">
+                                  {plan.details}
+                                </p>
+                              )}
+                              <small
+                                className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${plan.status === "accepted" ? "bg-[var(--success-bg)] text-[var(--success-text)]" : plan.status === "declined" || plan.status === "cancelled" ? "bg-[var(--danger-bg)] text-[var(--danger-text)]" : "bg-matcha-accent/10 text-matcha-accent"}`}
+                              >
                                 {statusLabel}
                               </small>
                             </div>
-                            <div className="date-plan-actions">
+                            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
                               {plan.status === "pending" &&
                                 plan.invitee === myId && (
                                   <>
-                                    <button
+                                    <UiButton
                                       type="button"
                                       aria-label={`Accept ${plan.title} invitation`}
                                       disabled={busy}
+                                      className="min-h-9 rounded-lg px-3 text-xs"
                                       onClick={() =>
                                         void run(() =>
                                           respondToDate(plan.id, "accepted"),
@@ -507,11 +553,12 @@ export function ProfileDetail({
                                       }
                                     >
                                       <Check size={16} /> Accept
-                                    </button>
-                                    <button
+                                    </UiButton>
+                                    <UiButton
                                       type="button"
                                       aria-label={`Decline ${plan.title} invitation`}
                                       disabled={busy}
+                                      className="min-h-9 rounded-lg px-3 text-xs"
                                       onClick={() =>
                                         void run(() =>
                                           respondToDate(plan.id, "declined"),
@@ -519,20 +566,21 @@ export function ProfileDetail({
                                       }
                                     >
                                       <X size={16} /> Decline
-                                    </button>
+                                    </UiButton>
                                   </>
                                 )}
                               {(plan.status === "pending" ||
                                 plan.status === "accepted") && (
-                                <button
+                                <UiButton
                                   type="button"
                                   disabled={busy}
+                                  className="min-h-9 rounded-lg px-3 text-xs"
                                   onClick={() =>
                                     void run(() => cancelDate(plan.id))
                                   }
                                 >
                                   Cancel plan
-                                </button>
+                                </UiButton>
                               )}
                             </div>
                           </li>
@@ -540,12 +588,12 @@ export function ProfileDetail({
                       })}
                     </ul>
                   ) : (
-                    <p className="date-empty">
+                    <p className="m-0 text-sm leading-relaxed text-matcha-muted">
                       No date plans yet. Start with a place you both like.
                     </p>
                   )}
                   <form
-                    className="date-form"
+                    className="grid min-w-0 gap-3 border-t border-matcha-border pt-4"
                     onSubmit={(event) => {
                       event.preventDefault();
                       const form = event.currentTarget;
@@ -565,127 +613,61 @@ export function ProfileDetail({
                       });
                     }}
                   >
-                    <div className="date-form-grid">
-                      <label>
+                    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
                         Plan
-                        <input
+                        <UiInput
                           name="title"
                           placeholder="Coffee and a walk"
                           maxLength={100}
                           required
+                          className="w-full"
                         />
                       </label>
-                      <label>
+                      <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
                         Place
-                        <input
+                        <UiInput
                           name="location"
                           placeholder="A café or meeting spot"
                           maxLength={160}
                           required
+                          className="w-full"
                         />
                       </label>
-                      <label>
+                      <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
                         Date and time
-                        <input
+                        <UiInput
                           name="starts_at"
                           type="datetime-local"
                           min={dateMin}
                           max={dateMax}
                           required
+                          className="w-full"
                         />
                       </label>
                     </div>
-                    <label>
+                    <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
                       A note (optional)
-                      <textarea
+                      <UiTextarea
                         name="details"
                         placeholder="Anything useful to know?"
                         maxLength={500}
                         rows={2}
+                        className="w-full"
                       />
                     </label>
-                    <button className="primary" disabled={busy}>
+                    <UiButton
+                      variant="primary"
+                      className="min-h-11 w-full rounded-xl !border-matcha-accent !bg-matcha-accent font-semibold !text-[var(--accent-foreground)] hover:!bg-matcha-accent/90 sm:w-fit"
+                      disabled={busy}
+                    >
                       Send date invitation
-                    </button>
-                    <small>Plans can be scheduled up to 90 days ahead.</small>
+                    </UiButton>
+                    <small className="text-xs text-matcha-muted">
+                      Plans can be scheduled up to 90 days ahead.
+                    </small>
                   </form>
                 </section>
-                {next && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void run(async () => {
-                        const response = await api<{
-                          messages: Message[];
-                          next_before: number | null;
-                        }>(
-                          `/conversations/${person.id}/messages?before=${next}`,
-                          "GET",
-                          undefined,
-                          undefined,
-                          4000,
-                        );
-                        setMessages((items) =>
-                          mergeMessages(items, response.messages),
-                        );
-                        setNext(response.next_before);
-                      })
-                    }
-                  >
-                    Older messages
-                  </button>
-                )}
-                <div
-                  className="messages"
-                  role="log"
-                  aria-label={`Conversation with ${profile.first_name}`}
-                  aria-live="polite"
-                  aria-relevant="additions text"
-                >
-                  {messages.map((message) => (
-                    <div
-                      className={message.actor === myId ? "sent" : "received"}
-                      key={message.id}
-                      data-message-id={message.id}
-                    >
-                      <span className="sr-only">
-                        {message.actor === myId
-                          ? "You sent: "
-                          : `${profile.first_name} sent: `}
-                      </span>
-                      {message.body}
-                      <small
-                        ref={message.id === lastId ? readMarker : undefined}
-                      >
-                        {new Date(message.created_at).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </small>
-                    </div>
-                  ))}
-                  <div ref={bottom} />
-                </div>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void run(send);
-                  }}
-                >
-                  <input
-                    name="body"
-                    disabled={busy}
-                    aria-label="Message"
-                    placeholder="Start with hello…"
-                    maxLength={4000}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    required
-                  />
-                  <button className="primary" disabled={busy || !draft.trim()}>
-                    Send
-                  </button>
-                </form>
               </section>
             )}
           </div>

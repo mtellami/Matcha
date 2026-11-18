@@ -177,7 +177,9 @@ def cancel_date(event_id):
 def conversations():
     with db() as conn:
         rows = conn.execute(
-            """SELECT u.id,u.username,u.first_name,
+            """SELECT u.id,u.username,u.first_name,u.last_name,u.last_seen,
+            EXISTS(SELECT 1 FROM presence p JOIN sessions s ON s.token=p.session_token
+                   WHERE s.user_id=u.id AND s.expires_at>now() AND p.expires_at>now()) AS online,
             (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id,
             (SELECT body FROM messages WHERE (actor=%s AND target=u.id) OR (actor=u.id AND target=%s) ORDER BY id DESC LIMIT 1) AS preview,
             (SELECT max(id) FROM messages WHERE (actor=%s AND target=u.id) OR (actor=u.id AND target=%s)) AS last_message_id,

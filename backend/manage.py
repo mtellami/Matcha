@@ -16,10 +16,29 @@ def migrate():
             row["name"]
             for row in conn.execute("SELECT name FROM migrations").fetchall()
         }
-        if applied:
-            return
-        conn.execute((root / "schema.sql").read_text())
-        conn.execute("INSERT INTO migrations(name) VALUES (%s)", ("baseline",))
+        if "baseline" not in applied:
+            conn.execute((root / "schema.sql").read_text())
+            conn.execute("INSERT INTO migrations(name) VALUES (%s)", ("baseline",))
+        if "photo_positions" not in applied:
+            conn.execute(
+                "ALTER TABLE photos ADD COLUMN IF NOT EXISTS position integer NOT NULL DEFAULT 0"
+            )
+            conn.execute("""
+                WITH ranked AS (
+                  SELECT id, row_number() OVER (
+                    PARTITION BY user_id ORDER BY is_primary DESC, id
+                  ) - 1 AS position
+                  FROM photos
+                )
+                UPDATE photos p SET position=ranked.position
+                FROM ranked WHERE p.id=ranked.id
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS photos_user_position ON photos (user_id, position, id)"
+            )
+            conn.execute(
+                "INSERT INTO migrations(name) VALUES (%s)", ("photo_positions",)
+            )
 
 
 def seed():

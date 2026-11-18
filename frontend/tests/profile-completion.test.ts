@@ -32,6 +32,8 @@ test("a profile without a photo can discover but still needs a photo to connect"
 test("a newly registered member is directed to missing details", () => {
   const fresh = {
     ...member,
+    first_name: "",
+    last_name: "",
     birth_date: null,
     gender: null,
     bio: "",

@@ -47,13 +47,15 @@ def register():
     email = text(d.get("email"), "Email", 254).lower()
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         fail("Enter a valid email", field="email")
+    first_name = text(d.get("first_name"), "First name", 80)
+    last_name = text(d.get("last_name"), "Last name", 80)
     hashed = services.ph.hash(
         password(
             d.get("password"),
             [
                 d.get("username"),
-                d.get("first_name"),
-                d.get("last_name"),
+                first_name,
+                last_name,
                 d.get("email"),
             ],
         )
@@ -64,8 +66,8 @@ def register():
             (
                 email,
                 username.lower(),
-                text(d.get("first_name"), "First name", 80),
-                text(d.get("last_name"), "Last name", 80),
+                first_name,
+                last_name,
                 hashed,
             ),
         ).fetchone()
@@ -87,10 +89,13 @@ def login():
     login_password = d.get("password")
     if not isinstance(login_password, str) or not 1 <= len(login_password) <= 128:
         fail("Invalid username or password", 401)
+    login_identifier = text(
+        d.get("identifier", d.get("username")), "Email or username", 254
+    ).lower()
     with db() as conn:
         user = conn.execute(
-            "SELECT * FROM users WHERE username=%s FOR UPDATE",
-            (text(d.get("username"), "Username", 30).lower(),),
+            "SELECT * FROM users WHERE username=%s OR email=%s FOR UPDATE",
+            (login_identifier, login_identifier),
         ).fetchone()
         try:
             services.ph.verify(
@@ -210,9 +215,7 @@ def reset_request():
         message = email_token(conn, user, "reset") if user else None
     if message:
         services.deliver_account_message(message)
-    return {
-        "message": "If the account exists, check your inbox for a reset link. You can request another link if it does not arrive."
-    }
+    return {"message": "If an account exists, a reset link is on its way."}
 
 
 @bp.post("/api/v1/auth/token")
@@ -331,6 +334,4 @@ def verification_request():
         message = email_token(conn, user, "verify") if user else None
     if message:
         services.deliver_account_message(message)
-    return {
-        "message": "If your account needs verification, check your inbox for a new link. You can try again if it does not arrive."
-    }
+    return {"message": "If eligible, check your inbox for a verification link."}

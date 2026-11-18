@@ -8,6 +8,7 @@ from app import (
     cmp_to_key,
     connected,
     create_photo,
+    current_session,
     data,
     date,
     db,
@@ -31,47 +32,72 @@ from app import (
 bp = Blueprint("profiles", __name__)
 
 
-@bp.get("/api/v1/me")
-@auth
-def me():
+def _current_user():
     with db() as conn:
         user = conn.execute(
             "SELECT id,email,username,first_name,last_name,birth_date,gender,preferences,bio,city,latitude,longitude,tags,map_visible FROM users WHERE id=%s",
             (g.uid,),
         ).fetchone()
         user["photos"] = conn.execute(
-            "SELECT id,is_primary FROM photos WHERE user_id=%s ORDER BY is_primary DESC,id",
+            "SELECT id,is_primary FROM photos WHERE user_id=%s ORDER BY position,id",
             (g.uid,),
         ).fetchall()
     if user["birth_date"]:
         user["birth_date"] = user["birth_date"].isoformat()
-    return jsonify(user=user, csrf=g.csrf)
+    return user
+
+
+@bp.get("/api/v1/me/session")
+def me_session():
+    session = current_session()
+    if not session:
+        return jsonify(user=None, csrf="")
+    g.uid = session["user_id"]
+    g.csrf = session["csrf"]
+    return jsonify(user=_current_user(), csrf=g.csrf)
+
+
+@bp.get("/api/v1/me")
+@auth
+def me():
+    return jsonify(user=_current_user(), csrf=g.csrf)
 
 
 @bp.put("/api/v1/me/profile")
+@bp.patch("/api/v1/me/profile")
 @auth
 def edit_profile():
-    fields = profile_fields(select_location(data()))
+    submitted = data()
+    location_keys = {"city", "latitude", "longitude", "location_id", "location_source"}
+    submitted = (
+        select_location(submitted)
+        if location_keys.intersection(submitted)
+        else submitted
+    )
+    fields = profile_fields(submitted, partial=True)
+    columns = {
+        "first_name": "first_name",
+        "last_name": "last_name",
+        "birth_date": "birth_date",
+        "gender": "gender",
+        "preferences": "preferences",
+        "bio": "bio",
+        "city": "city",
+        "latitude": "latitude",
+        "longitude": "longitude",
+        "tags": "tags",
+        "map_visible": "map_visible",
+    }
+    updates = [
+        (column, fields[key]) for key, column in columns.items() if key in fields
+    ]
+    if not updates:
+        return {"message": "No profile changes to save"}
     with db() as conn:
+        assignments = ",".join(f"{column}=%s" for column, _ in updates)
         conn.execute(
-            "UPDATE users SET first_name=%s,last_name=%s,birth_date=%s,gender=%s,preferences=%s,bio=%s,city=%s,latitude=%s,longitude=%s,tags=%s,map_visible=COALESCE(%s,map_visible) WHERE id=%s",
-            tuple(
-                fields[key]
-                for key in (
-                    "first_name",
-                    "last_name",
-                    "birth_date",
-                    "gender",
-                    "preferences",
-                    "bio",
-                    "city",
-                    "latitude",
-                    "longitude",
-                    "tags",
-                    "map_visible",
-                )
-            )
-            + (g.uid,),
+            f"UPDATE users SET {assignments} WHERE id=%s",
+            tuple(value for _, value in updates) + (g.uid,),
         )
     return {"message": "Profile saved"}
 
@@ -83,6 +109,34 @@ def upload():
     if not file:
         fail("Select an image", field="photo")
     return create_photo(g.uid, encode_photo(file.stream)), 201
+
+
+@bp.patch("/api/v1/me/photos/order")
+@auth
+def reorder_photos():
+    submitted = data().get("photo_ids")
+    if (
+        not isinstance(submitted, list)
+        or not 1 <= len(submitted) <= 5
+        or any(type(photo_id) is not int for photo_id in submitted)
+        or len(set(submitted)) != len(submitted)
+    ):
+        fail("Photo order is invalid")
+    with db() as conn:
+        conn.execute("SELECT id FROM users WHERE id=%s FOR UPDATE", (g.uid,))
+        existing = conn.execute(
+            "SELECT id FROM photos WHERE user_id=%s ORDER BY position,id FOR UPDATE",
+            (g.uid,),
+        ).fetchall()
+        if {photo["id"] for photo in existing} != set(submitted):
+            fail("Photo order is invalid")
+        conn.execute("UPDATE photos SET is_primary=false WHERE user_id=%s", (g.uid,))
+        for position, photo_id in enumerate(submitted):
+            conn.execute(
+                "UPDATE photos SET position=%s,is_primary=%s WHERE id=%s AND user_id=%s",
+                (position, position == 0, photo_id, g.uid),
+            )
+    return {"message": "Photo order saved"}
 
 
 @bp.get("/api/v1/photos/<int:photo_id>")
@@ -119,12 +173,13 @@ def profiles():
         rows = conn.execute(
             """SELECT u.id,u.username,u.first_name,u.last_name,u.birth_date,u.gender,u.bio,u.city,u.tags,
         u.latitude,u.longitude, (SELECT count(*) FROM likes WHERE target=u.id) AS likes,
+        EXISTS(SELECT 1 FROM likes WHERE actor=%s AND target=u.id) AS liked,
         (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id
         FROM users u WHERE u.id<>%s AND u.verified AND u.gender=ANY(%s)
         AND %s=ANY(u.preferences) AND u.birth_date IS NOT NULL AND u.latitude IS NOT NULL AND u.bio<>''
         AND cardinality(u.tags)>0 AND NOT EXISTS(SELECT 1 FROM blocks WHERE
           (actor=%s AND target=u.id) OR (actor=u.id AND target=%s))""",
-            (g.uid, own["preferences"], own["gender"], g.uid, g.uid),
+            (g.uid, g.uid, own["preferences"], own["gender"], g.uid, g.uid),
         ).fetchall()
     today = date.today()
     result = []
@@ -211,7 +266,7 @@ def profile(uid):
         today = date.today()
         u["age"] = age_on(born, today) if born else None
         u["photos"] = conn.execute(
-            "SELECT id,is_primary FROM photos WHERE user_id=%s ORDER BY is_primary DESC,id",
+            "SELECT id,is_primary FROM photos WHERE user_id=%s ORDER BY position,id",
             (uid,),
         ).fetchall()
         n = conn.execute(
@@ -340,14 +395,20 @@ def manage_photo(photo_id):
             conn.execute("DELETE FROM photos WHERE id=%s", (photo_id,))
             if photo["is_primary"]:
                 conn.execute(
-                    "UPDATE photos SET is_primary=true WHERE id=(SELECT id FROM photos WHERE user_id=%s ORDER BY id LIMIT 1)",
+                    """
+                    UPDATE photos SET is_primary=true
+                    WHERE id=(SELECT id FROM photos WHERE user_id=%s ORDER BY position,id LIMIT 1)
+                """,
                     (g.uid,),
                 )
         else:
             conn.execute(
-                "UPDATE photos SET is_primary=false WHERE user_id=%s", (g.uid,)
+                "UPDATE photos SET is_primary=false,position=position+1 WHERE user_id=%s AND id<>%s",
+                (g.uid, photo_id),
             )
-            conn.execute("UPDATE photos SET is_primary=true WHERE id=%s", (photo_id,))
+            conn.execute(
+                "UPDATE photos SET is_primary=true,position=0 WHERE id=%s", (photo_id,)
+            )
     return {"message": "Photos updated"}
 
 

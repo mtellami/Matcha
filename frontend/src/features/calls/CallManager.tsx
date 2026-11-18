@@ -1,3 +1,4 @@
+import { UiButton } from "../../shared/UiButton";
 import {
   forwardRef,
   useEffect,
@@ -422,24 +423,27 @@ export const CallManager = forwardRef<CallManagerHandle>(
     return (
       <>
         {callError && !call && (
-          <div className="call-notice" role="status">
+          <div
+            className="call-notice [position:fixed] [z-index:2501] [right:22px] [bottom:22px] [display:flex] [align-items:center] [gap:12px] [max-width:min(460px,_calc(100vw_-_32px))] [padding:12px_14px] [border:1px_solid_var(--border)] [border-radius:10px] [background:var(--surface)] [box-shadow:0_12px_34px_var(--shadow)] [font-size:13px] [&_button]:[border:0] [&_button]:[padding:2px_6px] [&_button]:[font-size:18px]"
+            role="status"
+          >
             {callError}
-            <button
+            <UiButton
               type="button"
               aria-label="Dismiss call message"
               onClick={() => setCallError("")}
             >
               ×
-            </button>
+            </UiButton>
           </div>
         )}
         {call && (
           <section
-            className="call-panel"
+            className="fixed bottom-[22px] right-[22px] z-[2500] grid w-[min(420px,calc(100vw-32px))] gap-3 rounded-2xl border border-matcha-border bg-matcha-surface p-4 shadow-[0_16px_48px_var(--shadow)] max-sm:bottom-3 max-sm:right-3 max-[950px]:[grid-template-columns:repeat(2,_1fr)] max-[600px]:[gap:14px]"
             role="dialog"
             aria-label={`${call.media} call with ${call.peer_name}`}
           >
-            <div className="call-panel-heading">
+            <div className="call-panel-heading [display:flex] [align-items:center] [justify-content:space-between] [gap:12px] [&_strong]:[display:block] [&_span]:[display:block] [&_span]:[margin-top:3px] [&_span]:[color:var(--muted)] [&_span]:[font-size:12px]">
               <div>
                 <strong>{call.peer_name}</strong>
                 <span>
@@ -457,9 +461,12 @@ export const CallManager = forwardRef<CallManagerHandle>(
               {call.media === "audio" && <Phone size={19} aria-hidden="true" />}
               {call.media === "video" && <Video size={19} aria-hidden="true" />}
             </div>
-            <div className="call-media">
+            <div className="call-media [position:relative] [display:grid] [place-items:center] [min-height:190px] [overflow:hidden] [border-radius:12px] [background:var(--text)] [background:var(--media-bg)]">
               {call.media === "audio" && (
-                <div className="audio-call-avatar" aria-hidden="true">
+                <div
+                  className="audio-call-avatar [display:grid] [place-items:center] [width:86px] [height:86px] [border-radius:50%] [color:var(--surface)] [background:var(--accent)] [font-size:34px]"
+                  aria-hidden="true"
+                >
                   {call.peer_name.slice(0, 1).toUpperCase()}
                 </div>
               )}
@@ -480,44 +487,47 @@ export const CallManager = forwardRef<CallManagerHandle>(
                   autoPlay
                   muted
                   playsInline
-                  className="call-local"
+                  className="call-local [position:absolute] [right:10px] [bottom:10px] [width:92px] [height:124px] [border:2px_solid_var(--surface)] [border-radius:9px] [background:var(--media-bg)] [object-fit:cover]"
                   aria-label="Your video preview"
                 />
               )}
             </div>
             {callError && (
-              <p className="call-panel-error" role="alert">
+              <p
+                className="call-panel-error [margin:0] [color:var(--danger-text)] [font-size:13px]"
+                role="alert"
+              >
                 {callError}
               </p>
             )}
             {call.phase === "incoming" ? (
-              <div className="call-actions">
-                <button
+              <div className="call-actions [display:flex] [justify-content:center] [gap:10px] [&_button]:[display:inline-flex] [&_button]:[align-items:center] [&_button]:[justify-content:center] [&_button]:[gap:7px] [&_button]:[min-height:42px] [&_.call-decline]:[color:#fff] [&_.call-decline]:[border-color:#a53127] [&_.call-decline]:[background:#a53127]">
+                <UiButton
                   type="button"
-                  className="call-decline"
+                  className="border-[#a53127] bg-[#a53127] text-white hover:bg-[#8f2823]"
                   onClick={() => void declineCall()}
                 >
                   <PhoneOff size={17} /> Decline
-                </button>
-                <button
+                </UiButton>
+                <UiButton
                   type="button"
-                  className="call-accept"
+                  className="border-matcha-accent bg-matcha-accent text-matcha-raised hover:opacity-90"
                   onClick={() => void acceptCall()}
                 >
                   <Phone size={17} /> Answer
-                </button>
+                </UiButton>
               </div>
             ) : (
-              <div className="call-actions">
-                <button
+              <div className="call-actions [display:flex] [justify-content:center] [gap:10px] [&_button]:[display:inline-flex] [&_button]:[align-items:center] [&_button]:[justify-content:center] [&_button]:[gap:7px] [&_button]:[min-height:42px] [&_.call-decline]:[color:#fff] [&_.call-decline]:[border-color:#a53127] [&_.call-decline]:[background:#a53127]">
+                <UiButton
                   type="button"
                   aria-label={muted ? "Unmute microphone" : "Mute microphone"}
                   onClick={toggleMicrophone}
                 >
                   {muted ? <MicOff size={18} /> : <Mic size={18} />}
-                </button>
+                </UiButton>
                 {call.media === "video" && (
-                  <button
+                  <UiButton
                     type="button"
                     aria-label={
                       cameraOff ? "Turn camera on" : "Turn camera off"
@@ -525,16 +535,16 @@ export const CallManager = forwardRef<CallManagerHandle>(
                     onClick={toggleCamera}
                   >
                     {cameraOff ? <VideoOff size={18} /> : <Video size={18} />}
-                  </button>
+                  </UiButton>
                 )}
-                <button
+                <UiButton
                   type="button"
                   className="call-decline"
                   aria-label="End call"
                   onClick={() => void endCall()}
                 >
                   <PhoneOff size={18} /> End call
-                </button>
+                </UiButton>
               </div>
             )}
           </section>

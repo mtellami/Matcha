@@ -79,9 +79,12 @@ export type Conversation = {
   id: number;
   username: string;
   first_name: string;
+  last_name: string;
   photo_id: number | null;
   preview: string | null;
   unread: number;
+  online: boolean;
+  last_seen: string | null;
 };
 export type Interest = {
   actor: number;

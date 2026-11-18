@@ -39,9 +39,11 @@ CREATE TABLE IF NOT EXISTS photos (
   id bigserial PRIMARY KEY,
   user_id bigint NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   filename text NOT NULL UNIQUE,
-  is_primary boolean NOT NULL DEFAULT false
+  is_primary boolean NOT NULL DEFAULT false,
+  position integer NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_primary_photo ON photos (user_id) WHERE is_primary;
+CREATE INDEX IF NOT EXISTS photos_user_position ON photos (user_id, position, id);
 
 CREATE TABLE IF NOT EXISTS likes (
   actor bigint REFERENCES users (id),

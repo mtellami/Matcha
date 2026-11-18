@@ -3,6 +3,20 @@ import type { Me } from "../../shared/types";
 export function profileSteps(me: Me) {
   return [
     {
+      id: "profile-first-name",
+      label: "First name",
+      detail: "Add your first name.",
+      done: Boolean(me.first_name.trim()),
+      required: true,
+    },
+    {
+      id: "profile-last-name",
+      label: "Last name",
+      detail: "Add your last name.",
+      done: Boolean(me.last_name.trim()),
+      required: true,
+    },
+    {
       id: "profile-birth-date",
       label: "Your age",
       detail: "Add your date of birth.",

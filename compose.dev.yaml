@@ -1,5 +1,7 @@
 # Development adds only local S3/SMTP infrastructure to the production stack.
 services:
+  db:
+    ports: ["127.0.0.1:5432:5432"]
   rustfs:
     image: rustfs/rustfs:latest
     user: "0:0"

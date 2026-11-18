@@ -42,7 +42,7 @@ def test_invalid_fields_are_reported_together():
                 "birth_date": [],
                 "gender": {},
                 "preferences": [{}],
-                "bio": "",
+                "bio": None,
                 "city": "",
                 "latitude": float("nan"),
                 "longitude": True,

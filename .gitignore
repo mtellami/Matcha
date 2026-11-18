@@ -12,3 +12,4 @@ requirements.pdf
 playwright-report/
 test-results/
 *.tsbuildinfo
+.playwright-mcp/

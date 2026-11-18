@@ -7,6 +7,7 @@ import time
 from datetime import date, datetime, timezone, timedelta
 from functools import cmp_to_key, wraps
 from io import BytesIO
+from urllib.parse import urlsplit
 
 import storage
 import requests
@@ -43,6 +44,21 @@ from validation import ValidationError, profile_fields
 from locations import LOCATIONS, select_location
 
 app = Flask(__name__)
+
+
+def allowed_origins():
+    origin = os.getenv("APP_ORIGIN", "http://localhost:8080").rstrip("/")
+    origins = {origin}
+    parsed = urlsplit(origin)
+    if parsed.hostname in {"localhost", "127.0.0.1"}:
+        origins.update(
+            f"{parsed.scheme}://{host}:{port}"
+            for host in ("localhost", "127.0.0.1")
+            for port in (5173, 5174)
+        )
+    return sorted(origins)
+
+
 oauth_state_secret = os.getenv("OAUTH_STATE_SECRET", "")
 oauth_credentials = {
     "google": (
@@ -106,7 +122,7 @@ pool = ConnectionPool(
 socketio = SocketIO(
     app,
     async_mode="threading",
-    cors_allowed_origins=[os.getenv("APP_ORIGIN", "http://localhost:8080")],
+    cors_allowed_origins=allowed_origins(),
 )
 ph = PasswordHasher()
 
@@ -392,14 +408,18 @@ def create_photo(user_id, contents, only_if_empty=False):
         if count >= 5:
             conn.execute("DELETE FROM photo_deletions WHERE filename=%s", (name,))
         else:
+            position = conn.execute(
+                "SELECT COALESCE(MAX(position), -1) + 1 AS position FROM photos WHERE user_id=%s",
+                (user_id,),
+            ).fetchone()["position"]
             photo = conn.execute(
-                "INSERT INTO photos(user_id,filename,is_primary) VALUES(%s,%s,%s) RETURNING id",
-                (user_id, name, count == 0),
+                "INSERT INTO photos(user_id,filename,is_primary,position) VALUES(%s,%s,%s,%s) RETURNING id",
+                (user_id, name, count == 0, position),
             ).fetchone()
             try:
                 storage.put_photo(name, contents)
-            except Exception as exc:
-                app.logger.warning("Photo upload unavailable (%s)", type(exc).__name__)
+            except Exception:
+                app.logger.exception("Photo upload unavailable")
                 fail("Photo storage is temporarily unavailable. Please try again.", 503)
             conn.execute("DELETE FROM photo_deletions WHERE filename=%s", (name,))
     if count >= 5:
@@ -523,7 +543,7 @@ def request_guards():
     global _delivery_started
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("Origin")
-        if origin and origin != os.getenv("APP_ORIGIN", "http://localhost:8080"):
+        if origin and origin not in allowed_origins():
             fail("Untrusted origin", 403)
     if request.path.startswith("/api/v1/auth/") and request.method == "POST":
         key = request.remote_addr or "unknown"

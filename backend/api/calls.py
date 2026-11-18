@@ -6,6 +6,7 @@ from app import (
     disconnect,
     is_online,
     join_room,
+    lock_account,
     pair_lock,
     request,
     secrets,
@@ -20,12 +21,82 @@ def socket_connect(auth_payload=None):
     join_room("session:" + session["token"])
 
 
+def broadcast_presence(user_id, online):
+    """Send presence hints only to mutual, unblocked connections."""
+    with db() as conn:
+        peers = conn.execute(
+            """SELECT DISTINCT a.target AS id FROM likes a
+               JOIN likes b ON b.actor=a.target AND b.target=a.actor
+               WHERE a.actor=%s
+                 AND NOT EXISTS(
+                   SELECT 1 FROM blocks x
+                   WHERE (x.actor=%s AND x.target=a.target)
+                      OR (x.actor=a.target AND x.target=%s)
+                 )""",
+            (user_id, user_id, user_id),
+        ).fetchall()
+        sessions = []
+        for peer in peers:
+            sessions.extend(
+                conn.execute(
+                    "SELECT token FROM sessions WHERE user_id=%s AND expires_at>now()",
+                    (peer["id"],),
+                ).fetchall()
+            )
+    payload = {"user_id": user_id, "online": online}
+    for session in sessions:
+        socketio.emit("presence:changed", payload, to="session:" + session["token"])
+
+
+def update_socket_presence(session):
+    user_id = session["user_id"]
+    became_online = False
+    with db() as conn:
+        lock_account(conn, user_id, session["token"])
+        was_online = is_online(conn, user_id)
+        conn.execute(
+            """INSERT INTO presence(session_token,tab_id,expires_at)
+               VALUES(%s,%s,now()+interval '20 seconds')
+               ON CONFLICT(session_token,tab_id)
+               DO UPDATE SET expires_at=EXCLUDED.expires_at""",
+            (session["token"], request.sid),
+        )
+        if not was_online:
+            conn.execute("UPDATE users SET last_seen=now() WHERE id=%s", (user_id,))
+            became_online = True
+    if became_online:
+        broadcast_presence(user_id, True)
+
+
+@socketio.on("disconnect")
+def socket_disconnect(reason=None):
+    session = current_session()
+    if not session:
+        return
+    user_id = session["user_id"]
+    became_offline = False
+    with db() as conn:
+        lock_account(conn, user_id, session["token"])
+        was_online = is_online(conn, user_id)
+        removed = conn.execute(
+            "DELETE FROM presence WHERE session_token=%s AND tab_id=%s RETURNING tab_id",
+            (session["token"], request.sid),
+        ).fetchone()
+        if removed and was_online and not is_online(conn, user_id):
+            conn.execute("UPDATE users SET last_seen=now() WHERE id=%s", (user_id,))
+            became_offline = True
+    if became_offline:
+        broadcast_presence(user_id, False)
+
+
 @socketio.on("heartbeat")
 def socket_heartbeat():
-    if not current_session():
+    session = current_session()
+    if not session:
         socketio.emit("session_expired", to=request.sid)
         disconnect()
         return {"authenticated": False}
+    update_socket_presence(session)
     return {"authenticated": True}
 
 

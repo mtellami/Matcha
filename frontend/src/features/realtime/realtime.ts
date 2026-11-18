@@ -65,6 +65,7 @@ export function startRealtime(
   const listeners: [string, Listener][] = [
     ["connect", connected],
     ["notification", changed],
+    ["presence:changed", changed],
     ["session_expired", invalidate],
     ["disconnect", disconnected],
     ["connect_error", disconnected],
