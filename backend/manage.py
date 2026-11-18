@@ -39,6 +39,22 @@ def migrate():
             conn.execute(
                 "INSERT INTO migrations(name) VALUES (%s)", ("photo_positions",)
             )
+        if "message_attachments" not in applied:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS message_attachments (
+                  id bigserial PRIMARY KEY,
+                  message_id bigint NOT NULL UNIQUE REFERENCES messages(id) ON DELETE CASCADE,
+                  filename text NOT NULL UNIQUE,
+                  display_name text NOT NULL,
+                  content_type text NOT NULL,
+                  attachment_kind text NOT NULL CHECK (attachment_kind IN ('photo', 'document', 'voice')),
+                  size integer NOT NULL CHECK (size > 0),
+                  created_at timestamptz NOT NULL DEFAULT now()
+                )
+            """)
+            conn.execute(
+                "INSERT INTO migrations(name) VALUES (%s)", ("message_attachments",)
+            )
 
 
 def seed():

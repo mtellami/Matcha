@@ -13,8 +13,9 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@internationalized/date": "^3.12.4",
     "@heroui/react": "^3.2.7",
+    "@internationalized/date": "^3.12.4",
+    "emoji-picker-react": "^5.1.4",
     "framer-motion": "^14.14.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",

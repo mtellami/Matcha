@@ -14,7 +14,7 @@ import { NotificationList } from "./NotificationList";
 import { activityDateLabel } from "./date";
 
 const tabs = [
-  ["notifications", "Notifications"],
+  ["notifications", "All"],
   ["visitors", "Visitors"],
   ["connections", "Connections"],
   ["likes", "Received interest"],

@@ -164,3 +164,23 @@
     }
   }
 }
+
+.matcha-emoji-picker [data-epr-part="viewport"] {
+  scrollbar-color: color-mix(in srgb, var(--muted) 55%, transparent)
+    var(--surface);
+  scrollbar-width: thin;
+}
+.matcha-emoji-picker [data-epr-part="viewport"]::-webkit-scrollbar {
+  width: 8px;
+}
+.matcha-emoji-picker [data-epr-part="viewport"]::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+.matcha-emoji-picker [data-epr-part="viewport"]::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+}
+.matcha-emoji-picker [data-epr-part="viewport"]::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}

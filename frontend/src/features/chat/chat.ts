@@ -24,6 +24,7 @@ export async function messageUpdates(
   after: number | null,
   signal?: AbortSignal,
   read: ReadPage = readPage,
+  initialLimit = 50,
 ) {
   let cursor = after;
   const messages: Message[] = [];
@@ -31,7 +32,11 @@ export async function messageUpdates(
   while (true) {
     const path =
       `/conversations/${peer}/messages` +
-      (cursor === null ? "" : `?after=${cursor}`);
+      (cursor === null
+        ? initialLimit === 50
+          ? ""
+          : `?limit=${initialLimit}`
+        : `?after=${cursor}`);
     const page = await read(path, signal);
     messages.push(...page.messages);
     if (after === null) {

@@ -113,7 +113,7 @@ if os.getenv("TRUST_PROXY", "false").lower() == "true":
     app.wsgi_app = ProxyFix(
         app.wsgi_app, x_for=1, x_proto=0, x_host=0, x_port=0, x_prefix=0
     )
-app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 pool = ConnectionPool(
     os.environ.get("DATABASE_URL", "postgresql://matcha:matcha@localhost/matcha"),
     kwargs={"row_factory": dict_row},
@@ -507,6 +507,7 @@ def cleanup_pending_photos():
         pending = conn.execute(
             """SELECT d.filename FROM photo_deletions d WHERE d.ready_at<=now()
             AND NOT EXISTS(SELECT 1 FROM photos p WHERE p.filename=d.filename)
+            AND NOT EXISTS(SELECT 1 FROM message_attachments a WHERE a.filename=d.filename)
             ORDER BY d.ready_at LIMIT 20 FOR UPDATE OF d SKIP LOCKED"""
         ).fetchall()
         for photo in pending:

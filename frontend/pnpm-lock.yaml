@@ -225,6 +225,9 @@ importers:
       "@internationalized/date":
         specifier: ^3.12.4
         version: 3.12.4
+      emoji-picker-react:
+        specifier: ^5.1.4
+        version: 5.1.4(react@19.3.1)
       framer-motion:
         specifier: ^14.14.0
         version: 14.14.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -1305,6 +1308,15 @@ packages:
         integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==,
       }
 
+  emoji-picker-react@5.1.4:
+    resolution:
+      {
+        integrity: sha512-kWBAgDCFPcRJrINeRE7/o7VAVNc0Yeg1n7gMHSvJ54qffidCV8Jdmeb9iEHkx1CtClzhnutCax8bQFDTHAbyTg==,
+      }
+    engines: { node: ">=18" }
+    peerDependencies:
+      react: ">=16.8"
+
   engine.io-client@6.6.8:
     resolution:
       {
@@ -1714,6 +1726,12 @@ packages:
     resolution:
       {
         integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==,
+      }
+
+  shipstyles@1.0.0:
+    resolution:
+      {
+        integrity: sha512-1AcihfXo/mSxqeOdoKqq/5TNv+vSH0dBYPFq88PUX5FBkK5pRmY5TP9SuMNio85PQ+euUI67+KpSVk1cUVDCgA==,
       }
 
   socket.io-client@4.8.4:
@@ -2651,6 +2669,13 @@ snapshots:
       fsevents: 2.3.3
 
   scheduler@0.28.0: {}
+
+  emoji-picker-react@5.1.4(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+      shipstyles: 1.0.0
+
+  shipstyles@1.0.0: {}
 
   socket.io-client@4.8.4:
     dependencies:

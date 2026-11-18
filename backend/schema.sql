@@ -72,6 +72,16 @@ CREATE TABLE IF NOT EXISTS messages (
   client_id text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
   is_read boolean NOT NULL DEFAULT false, UNIQUE (actor, client_id)
 );
+CREATE TABLE IF NOT EXISTS message_attachments (
+  id bigserial PRIMARY KEY,
+  message_id bigint NOT NULL UNIQUE REFERENCES messages(id) ON DELETE CASCADE,
+  filename text NOT NULL UNIQUE,
+  display_name text NOT NULL,
+  content_type text NOT NULL,
+  attachment_kind text NOT NULL CHECK (attachment_kind IN ('photo', 'document', 'voice')),
+  size integer NOT NULL CHECK (size > 0),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS notifications (
   id bigserial PRIMARY KEY,
   actor bigint REFERENCES users (id), target bigint REFERENCES users (id),

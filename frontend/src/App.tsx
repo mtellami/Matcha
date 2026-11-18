@@ -12,7 +12,7 @@ import {
   Settings as SettingsIcon,
   User,
 } from "lucide-react";
-import { io } from "socket.io-client";
+import { io, type Socket } from "socket.io-client";
 import {
   startRealtime,
   type ConnectionState,
@@ -98,6 +98,7 @@ export default function App() {
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
+  const [realtimeSocket, setRealtimeSocket] = useState<Socket | null>(null);
   const profileReturnPath = useRef("/discover");
   const navigateRef = useRef(routerNavigate);
   navigateRef.current = routerNavigate;
@@ -237,7 +238,8 @@ export default function App() {
   useEffect(() => {
     if (!me) return;
     const socket = io({ autoConnect: false });
-    return startRealtime(
+    setRealtimeSocket(socket);
+    const stop = startRealtime(
       socket,
       () => setRevision((value) => value + 1),
       () => {
@@ -249,6 +251,10 @@ export default function App() {
       },
       setConnection,
     );
+    return () => {
+      stop();
+      setRealtimeSocket((current) => (current === socket ? null : current));
+    };
   }, [me?.id, redirectToLogin]);
   useEffect(() => {
     if (!me) return;
@@ -266,14 +272,16 @@ export default function App() {
     async (id: number) => {
       if (!isProfileRoute(location.pathname))
         profileReturnPath.current =
-          location.pathname === "/" ? "/discover" : location.pathname;
+          location.pathname === "/"
+            ? "/discover"
+            : `${location.pathname}${location.search}`;
       const person = await api<Profile>("/profiles/" + id);
       const path = id === me?.id ? "/profile" : `/profile/${id}`;
       if (location.pathname !== path) routerNavigate(path);
       setSelected(person);
       setProfileMenuOpen(false);
     },
-    [me?.id, location.pathname, routerNavigate],
+    [me?.id, location.pathname, location.search, routerNavigate],
   );
   const openConversation = useCallback(
     (id: number) => {
@@ -489,7 +497,14 @@ export default function App() {
       unreadCount={summary.notifications}
     />
   ) : view === "inbox" ? (
-    <Inbox run={run} revision={revision} changed={refreshSummary} />
+    <Inbox
+      run={run}
+      revision={revision}
+      changed={refreshSummary}
+      openProfile={openProfile}
+      notify={setNotice}
+      socket={realtimeSocket}
+    />
   ) : !canDiscover(me) ? (
     <ProfileCompletion
       variant="welcome"
@@ -575,7 +590,7 @@ export default function App() {
         </Link>
         {me && (
           <nav
-            className="flex flex-1 justify-center gap-1 max-lg:order-last max-lg:w-full max-lg:flex-none max-lg:justify-start max-lg:overflow-x-auto"
+            className="flex flex-1 justify-center gap-1 max-md:order-last max-md:w-full max-md:flex-none max-md:justify-start max-md:overflow-x-auto"
             aria-label="Main navigation"
           >
             {tabs.map(({ key, label, Icon, count }) => (
@@ -587,7 +602,7 @@ export default function App() {
                 onClick={() => navigate(key)}
               >
                 <Icon size={18} />
-                {label}
+                <span className="hidden lg:inline">{label}</span>
                 {!!count && (
                   <span className="badge [background:var(--accent-soft)] [border-radius:20px] [padding:3px_8px] [font-size:11px] [white-space:nowrap]">
                     {count}
@@ -710,7 +725,7 @@ export default function App() {
               : !me && authOpen
                 ? "mx-auto max-w-[1280px] px-5 py-5 sm:px-[45px] sm:py-[52px]"
                 : me && view === "inbox"
-                  ? "mx-auto flex h-svh min-h-0 max-w-[1280px] flex-col overflow-hidden px-5 pb-5 pt-36 sm:px-[45px]"
+                  ? "mx-auto flex h-dvh min-h-0 max-w-[1280px] flex-col overflow-hidden px-0 pb-0 pt-[152px] md:px-5 md:pb-5 md:pt-28 lg:px-[45px]"
                   : me
                     ? "mx-auto min-h-[calc(100vh-180px)] max-w-[1280px] px-[45px] pb-20 pt-36 lg:pt-[120px]"
                     : "mx-auto min-h-[calc(100vh-180px)] max-w-[1280px] px-[45px] py-[52px] pb-20"

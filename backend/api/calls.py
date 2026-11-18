@@ -110,6 +110,31 @@ def emit_user_sessions(conn, user_id, event, payload, except_session=None):
             socketio.emit(event, payload, to="session:" + session["token"])
 
 
+@socketio.on("conversation:typing")
+def socket_conversation_typing(payload):
+    session = current_session()
+    peer_id = payload.get("peer_id") if isinstance(payload, dict) else None
+    is_typing = payload.get("is_typing") if isinstance(payload, dict) else None
+    if (
+        not session
+        or isinstance(peer_id, bool)
+        or not isinstance(peer_id, int)
+        or not isinstance(is_typing, bool)
+    ):
+        return {"ok": False}
+    with db() as conn:
+        pair_lock(conn, session["user_id"], peer_id)
+        if not connected(conn, session["user_id"], peer_id):
+            return {"ok": False}
+        emit_user_sessions(
+            conn,
+            peer_id,
+            "conversation:typing",
+            {"conversation_id": session["user_id"], "is_typing": is_typing},
+        )
+    return {"ok": True}
+
+
 def socket_call(payload, statuses):
     session = current_session()
     if not session:

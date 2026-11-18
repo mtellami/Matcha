@@ -75,6 +75,13 @@ export type Message = {
   body: string;
   created_at: string;
   is_read: boolean;
+  attachment: {
+    id: number;
+    name: string;
+    content_type: string;
+    kind: "photo" | "document" | "voice";
+    size: number;
+  } | null;
 };
 export type Conversation = {
   id: number;
@@ -83,6 +90,9 @@ export type Conversation = {
   last_name: string;
   photo_id: number | null;
   preview: string | null;
+  last_message_at: string | null;
+  common_tags: number;
+  connected_at: string | null;
   unread: number;
   online: boolean;
   last_seen: string | null;

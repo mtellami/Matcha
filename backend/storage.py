@@ -34,12 +34,20 @@ def bucket():
 
 
 def put_photo(key, contents):
+    put_object(key, contents, "image/jpeg")
+
+
+def put_object(key, contents, content_type):
     client().put_object(
-        Bucket=bucket(), Key=key, Body=contents, ContentType="image/jpeg"
+        Bucket=bucket(), Key=key, Body=contents, ContentType=content_type
     )
 
 
 def get_photo(key):
+    return get_object(key)
+
+
+def get_object(key):
     response = client().get_object(Bucket=bucket(), Key=key)
     try:
         return response["Body"].read()
@@ -48,6 +56,10 @@ def get_photo(key):
 
 
 def delete_photo(key):
+    delete_object(key)
+
+
+def delete_object(key):
     client().delete_object(Bucket=bucket(), Key=key)
 
 
