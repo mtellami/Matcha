@@ -483,8 +483,10 @@ export default function App() {
       busy={busy}
       run={run}
       openProfile={openProfile}
+      openConversation={openConversation}
       changed={refreshSummary}
       revision={`${revision}:${summary.notifications}`}
+      unreadCount={summary.notifications}
     />
   ) : view === "inbox" ? (
     <Inbox run={run} revision={revision} changed={refreshSummary} />

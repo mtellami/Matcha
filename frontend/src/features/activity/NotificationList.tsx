@@ -4,14 +4,17 @@ import {
   Eye,
   Heart,
   Link,
+  MailOpen,
   MessageCircle,
+  User,
   Unlink,
 } from "lucide-react";
 import type { Notification, Runner } from "../../shared/types";
+import { activityDateLabel, activityDayLabel } from "./date";
 
 const events: Record<string, { text: string; Icon: typeof Heart }> = {
   visit: { text: "viewed your profile", Icon: Eye },
-  like: { text: "is interested in you", Icon: Heart },
+  like: { text: "liked your profile", Icon: Heart },
   match: { text: "connected with you", Icon: Link },
   message: { text: "sent you a message", Icon: MessageCircle },
   disconnect: { text: "removed their interest", Icon: Unlink },
@@ -32,61 +35,98 @@ export function NotificationList({
   open: (item: Notification) => Promise<void>;
   markRead: (item: Notification) => Promise<void>;
 }) {
+  const groups = items.reduce<{ label: string; items: Notification[] }[]>(
+    (result, item) => {
+      const label = activityDayLabel(item.created_at);
+      const latest = result.at(-1);
+      if (latest?.label === label) latest.items.push(item);
+      else result.push({ label, items: [item] });
+      return result;
+    },
+    [],
+  );
+
   return (
-    <div className="notification-list [display:flex] [flex-direction:column] [gap:10px]">
-      {items.map((item) => {
-        const { text, Icon } = events[item.kind] || {
-          text: "updated your activity",
-          Icon: Heart,
-        };
-        return (
-          <article
-            className={`flex items-center gap-3 rounded-xl border border-matcha-border p-3 ${item.is_read ? "bg-matcha-surface" : "bg-matcha-raised"}`}
-            key={item.id}
-            data-notification-id={item.id}
-            aria-label={`${item.username} ${text}${item.is_read ? ", read" : ", unread"}`}
-          >
-            <UiButton
-              className="flex min-w-0 flex-1 items-center justify-start gap-3 border-0 bg-transparent text-left hover:bg-transparent"
-              disabled={busy}
-              onClick={() => void run(() => open(item))}
-            >
-              <span
-                className="event-icon [display:grid] [place-items:center] [flex:none] [width:50px] [height:50px] [border-radius:13px] [background:var(--accent-soft)] [color:var(--accent-soft-foreground)] [font-size:28px] [display:flex] [flex-shrink:0] [color:var(--accent)]"
-                aria-hidden="true"
-              >
-                <Icon size={20} />
-              </span>
-              {item.photo_id && (
-                <img
-                  className="avatar [width:48px] [height:48px] [border-radius:50%] [object-fit:cover]"
-                  src={`/api/v1/photos/${item.photo_id}`}
-                  alt=""
-                />
-              )}
-              <span className="notification-copy [font-size:14px] [line-height:1.6] [overflow-wrap:anywhere] [min-width:0] [&_small]:[display:block] [&_small]:[font-size:11px] [&_small]:[margin:4px_0_0] [&_small]:[color:var(--muted)] max-[650px]:[font-size:12px]">
-                <strong>{item.first_name || item.username}</strong> {text}
-                <small>
-                  @{item.username} ·{" "}
-                  <time dateTime={item.created_at}>
-                    {new Date(item.created_at).toLocaleString()}
+    <div className="grid gap-5">
+      {groups.map((group) => (
+        <section key={group.label} aria-label={group.label}>
+          <h2 className="mb-2 mt-0 text-[11px] font-bold uppercase tracking-[2px] text-matcha-muted">
+            {group.label}
+          </h2>
+          <div className="overflow-hidden rounded-2xl border border-matcha-border bg-matcha-surface">
+            {group.items.map((item, index) => {
+              const { text, Icon } = events[item.kind] || {
+                text: "updated your activity",
+                Icon: Heart,
+              };
+              const displayName =
+                [item.first_name, item.last_name].filter(Boolean).join(" ") ||
+                item.username;
+
+              return (
+                <article
+                  className={`flex min-w-0 items-center gap-2.5 px-3 py-3.5 sm:gap-3.5 sm:px-4 ${index ? "border-t border-matcha-border/70" : ""} ${item.is_read ? "bg-matcha-surface" : "bg-matcha-accent/[0.035]"}`}
+                  key={item.id}
+                >
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:rounded-xl focus-visible:outline-2 focus-visible:outline-matcha-accent sm:gap-4"
+                    aria-label={`${item.username} ${text}${item.is_read ? ", read" : ", unread"}`}
+                    disabled={busy}
+                    onClick={() => void run(() => open(item))}
+                  >
+                    <span className="relative size-11 shrink-0 sm:size-12">
+                      {item.photo_id ? (
+                        <img
+                          className="size-full rounded-full object-cover"
+                          src={`/api/v1/photos/${item.photo_id}`}
+                          alt=""
+                        />
+                      ) : (
+                        <span className="grid size-full place-items-center rounded-full bg-matcha-accent/10 text-matcha-accent">
+                          <User size={22} aria-hidden="true" />
+                        </span>
+                      )}
+                      <span className="absolute -bottom-0.5 -right-1 grid size-6 place-items-center rounded-full border-2 border-matcha-surface bg-matcha-accent text-white">
+                        <Icon size={11} aria-hidden="true" />
+                      </span>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] leading-snug text-matcha-text sm:text-sm">
+                        <strong className="font-semibold">{displayName}</strong>{" "}
+                        {text}
+                      </span>
+                      <span className="mt-1 block truncate text-xs text-matcha-muted">
+                        @{item.username}
+                      </span>
+                    </span>
+                  </button>
+                  <time
+                    className="shrink-0 text-[11px] text-matcha-muted sm:text-xs"
+                    dateTime={item.created_at}
+                  >
+                    {activityDateLabel(item.created_at)}
                   </time>
-                </small>
-              </span>
-            </UiButton>
-            {!item.is_read && (
-              <UiButton
-                className="shrink-0"
-                disabled={busy}
-                aria-label={`Mark notification from ${item.username} as read`}
-                onClick={() => void run(() => markRead(item))}
-              >
-                Mark read
-              </UiButton>
-            )}
-          </article>
-        );
-      })}
+                  {!item.is_read && (
+                    <>
+                      <UiButton
+                        type="button"
+                        className="!size-8 !min-h-8 !min-w-8 shrink-0 !rounded-full !p-0 text-matcha-accent"
+                        disabled={busy}
+                        aria-label={`Mark notification from ${item.username} as read`}
+                        title="Mark as read"
+                        onClick={() => void run(() => markRead(item))}
+                      >
+                        <MailOpen size={15} />
+                      </UiButton>
+                    </>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

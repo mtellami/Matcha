@@ -24,7 +24,7 @@ def notifications():
         fail("Unread filter must be true or false")
     with db() as conn:
         rows = conn.execute(
-            """SELECT n.*,u.username,u.first_name,
+            """SELECT n.*,u.username,u.first_name,u.last_name,
          (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id
          FROM notifications n JOIN users u ON u.id=n.actor
          WHERE n.target=%s AND NOT EXISTS(SELECT 1 FROM blocks b WHERE
@@ -70,14 +70,16 @@ def read_notifications():
 def activity():
     with db() as conn:
         visitors = conn.execute(
-            """SELECT v.id,v.actor,u.username,v.created_at FROM visits v JOIN users u ON u.id=v.actor
+            """SELECT v.id,v.actor,u.username,u.first_name,u.last_name,
+            (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id,v.created_at
+            FROM visits v JOIN users u ON u.id=v.actor
             WHERE v.target=%s AND v.id<%s AND NOT EXISTS(SELECT 1 FROM blocks b
             WHERE (b.actor=v.actor AND b.target=v.target) OR (b.actor=v.target AND b.target=v.actor))
             ORDER BY v.id DESC LIMIT 51""",
             (g.uid, cursor()),
         ).fetchall()
         relationships = conn.execute(
-            """SELECT u.id AS actor,u.username,u.first_name,u.city,
+            """SELECT u.id AS actor,u.username,u.first_name,u.last_name,u.city,
             (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id,
             l.actor=%s AS sent,
             EXISTS(SELECT 1 FROM likes reciprocal
@@ -94,13 +96,18 @@ def activity():
             "SELECT b.target AS actor,u.username FROM blocks b JOIN users u ON u.id=b.target WHERE b.actor=%s",
             (g.uid,),
         ).fetchall()
-    likes, sent = [], []
+    likes, sent, connections = [], [], {}
     for relationship in relationships:
-        (sent if relationship.pop("sent") else likes).append(relationship)
+        is_sent = relationship.pop("sent")
+        if relationship["connected"]:
+            connections.setdefault(relationship["actor"], relationship)
+        else:
+            (sent if is_sent else likes).append(relationship)
     return jsonify(
         visitors=visitors[:50],
         likes=likes,
         sent=sent,
+        connections=list(connections.values()),
         blocks=blocks,
         next_before=visitors[49]["id"] if len(visitors) > 50 else None,
     )

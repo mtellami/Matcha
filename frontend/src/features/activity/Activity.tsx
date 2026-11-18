@@ -1,7 +1,7 @@
-import { UiInput, UiTextarea } from "../../shared/UiInput";
 import { UiButton } from "../../shared/UiButton";
 import { useEffect, useRef, useState } from "react";
-import { Bell, Eye } from "lucide-react";
+import { Check, MailOpen, MessageCircle, User } from "lucide-react";
+import { Switch } from "@heroui/react";
 import { api } from "../../shared/api";
 import { historyWindow } from "./history";
 import type {
@@ -11,10 +11,12 @@ import type {
 } from "../../shared/types";
 import { InterestList } from "./InterestList";
 import { NotificationList } from "./NotificationList";
+import { activityDateLabel } from "./date";
 
 const tabs = [
   ["notifications", "Notifications"],
   ["visitors", "Visitors"],
+  ["connections", "Connections"],
   ["likes", "Received interest"],
   ["sent", "Sent interest"],
   ["blocks", "Blocked users"],
@@ -27,15 +29,19 @@ type NotificationPage = {
 export function Activity({
   run,
   openProfile,
+  openConversation,
   changed,
   revision,
   busy,
+  unreadCount,
 }: {
   run: Runner;
   openProfile: (id: number) => Promise<void>;
+  openConversation: (id: number) => void;
   changed: () => Promise<void>;
   revision: string;
   busy: boolean;
+  unreadCount: number;
 }) {
   const [tab, setTab] = useState("notifications");
   const [activity, setActivity] = useState<ActivityData | null>(null);
@@ -130,7 +136,12 @@ export function Activity({
     reload();
     setActivity((current) =>
       current
-        ? { ...current, likes: response.likes, sent: response.sent }
+        ? {
+            ...current,
+            likes: response.likes,
+            sent: response.sent,
+            connections: response.connections,
+          }
         : response,
     );
     await changed();
@@ -202,115 +213,132 @@ export function Activity({
     );
   }
   const visitors = activity?.visitors || [];
+  const connections = activity?.connections || [];
   const blocks = activity?.blocks || [];
 
+  function changeUnreadFilter(selected: boolean) {
+    notificationFloor.current = null;
+    mutation.current++;
+    setNotifications([]);
+    setNext(null);
+    setLoading(true);
+    setUnreadOnly(selected);
+  }
+
   return (
-    <>
-      <div className="eyebrow [font-size:10px] [font-weight:700] [letter-spacing:2.3px] [color:var(--accent)] [display:flex] [align-items:center] [gap:8px]">
+    <section className="mx-auto w-full max-w-[760px]">
+      <p className="mb-2 mt-0 text-[10px] font-bold tracking-[2.3px] text-matcha-accent">
         YOUR CONNECTIONS
-      </div>
-      <h1 className="my-5 text-[clamp(2.5rem,5vw,4rem)] font-medium leading-[1.12] tracking-[-2px]">
-        A little interest
-        <br />
-        goes a long way.
+      </p>
+      <h1 className="mb-5 mt-0 text-[clamp(2.5rem,5vw,3.25rem)] font-medium leading-[1.12] tracking-[-2px]">
+        A little interest{" "}
+        <em className="font-serif font-normal text-matcha-accent">
+          goes a long way.
+        </em>
       </h1>
+
       <div
-        className="tabs [display:flex] [gap:8px] [flex-wrap:wrap] max-[650px]:[&_button]:[font-size:11px]"
+        className="w-full overflow-x-auto border-b border-matcha-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label="Activity type"
       >
-        {tabs.map(([key, label], index) => (
-          <UiButton
-            role="tab"
-            id={`activity-tab-${key}`}
-            aria-controls="activity-panel"
-            aria-selected={tab === key}
-            tabIndex={tab === key ? 0 : -1}
-            className={tab === key ? "active" : ""}
-            key={key}
-            onClick={() => setTab(key)}
-            onKeyDown={(event) => {
-              const offset =
-                event.key === "ArrowRight"
-                  ? 1
-                  : event.key === "ArrowLeft"
-                    ? -1
-                    : 0;
-              const target =
-                event.key === "Home"
-                  ? 0
-                  : event.key === "End"
-                    ? tabs.length - 1
-                    : (index + offset + tabs.length) % tabs.length;
-              if (!offset && event.key !== "Home" && event.key !== "End")
-                return;
-              event.preventDefault();
-              setTab(tabs[target][0]);
-              document
-                .getElementById(`activity-tab-${tabs[target][0]}`)
-                ?.focus();
-            }}
-          >
-            {label}
-          </UiButton>
-        ))}
+        <div className="flex w-max min-w-full items-stretch">
+          {tabs.map(([key, label], index) => (
+            <UiButton
+              role="tab"
+              id={`activity-tab-${key}`}
+              aria-controls="activity-panel"
+              aria-selected={tab === key}
+              tabIndex={tab === key ? 0 : -1}
+              className={`h-12 shrink-0 rounded-none border-0 border-b-2 px-2 text-[13px] font-medium leading-none sm:text-sm ${key === "notifications" ? "!w-[142px] !min-w-[142px] !max-w-[142px]" : key === "visitors" ? "!w-[88px] !min-w-[88px] !max-w-[88px]" : key === "connections" ? "!w-[112px] !min-w-[112px] !max-w-[112px]" : key === "likes" ? "!w-[142px] !min-w-[142px] !max-w-[142px]" : key === "sent" ? "!w-[108px] !min-w-[108px] !max-w-[108px]" : "!w-[128px] !min-w-[128px] !max-w-[128px]"} ${tab === key ? "!border-matcha-accent !bg-transparent font-semibold !text-matcha-accent" : "!border-transparent !bg-transparent !text-matcha-muted hover:!bg-matcha-raised/50"}`}
+              key={key}
+              onClick={() => setTab(key)}
+              onKeyDown={(event) => {
+                const offset =
+                  event.key === "ArrowRight"
+                    ? 1
+                    : event.key === "ArrowLeft"
+                      ? -1
+                      : 0;
+                const target =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? tabs.length - 1
+                      : (index + offset + tabs.length) % tabs.length;
+                if (!offset && event.key !== "Home" && event.key !== "End")
+                  return;
+                event.preventDefault();
+                setTab(tabs[target][0]);
+                document
+                  .getElementById(`activity-tab-${tabs[target][0]}`)
+                  ?.focus();
+              }}
+            >
+              {label}
+              {key === "notifications" && unreadCount > 0 && (
+                <span className="grid min-w-5 place-items-center rounded-full bg-matcha-accent px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                  {unreadCount}
+                </span>
+              )}
+            </UiButton>
+          ))}
+        </div>
       </div>
-      <p
-        className="sr-only [position:absolute] [width:1px] [height:1px] [padding:0] [margin:-1px] [overflow:hidden] [clip:rect(0,_0,_0,_0)] [white-space:nowrap] [border:0]"
-        role="status"
-        aria-live="polite"
-      >
+
+      <p className="sr-only" role="status" aria-live="polite">
         {announcement}
       </p>
       <div
+        className="pt-4"
         role="tabpanel"
         id="activity-panel"
         aria-labelledby={`activity-tab-${tab}`}
       >
-        <div className="actions activity-controls [display:flex] [gap:10px] [flex-wrap:wrap] [margin-top:25px] [align-items:center] max-[650px]:[gap:6px] max-[650px]:[&__>button]:[font-size:12px]">
-          <UiButton disabled={loading || busy} onClick={reload}>
-            Refresh
-          </UiButton>
-          {tab === "notifications" && (
-            <>
-              <label className="unread-toggle [display:flex] [align-items:center] [gap:8px] [font-size:13px] [cursor:pointer] [padding:10px] [&_input]:[width:16px] [&_input]:[height:16px] [&_input]:[padding:0] [&_input]:[accent-color:var(--accent)]">
-                <UiInput
-                  type="checkbox"
-                  checked={unreadOnly}
-                  disabled={busy}
-                  onChange={(event) => {
-                    notificationFloor.current = null;
-                    mutation.current++;
-                    setNotifications([]);
-                    setNext(null);
-                    setLoading(true);
-                    setUnreadOnly(event.target.checked);
-                  }}
-                />{" "}
-                Unread only
-              </label>
-              <UiButton
-                disabled={
-                  busy || loading || !notifications.some((n) => !n.is_read)
-                }
-                onClick={() => void run(markAllRead)}
-              >
-                Mark all read
-              </UiButton>
-            </>
-          )}
-        </div>
         {error && (
           <p
-            className="mb-6 flex justify-between rounded-lg bg-[var(--danger-bg)] p-[15px] text-[var(--danger-text)]"
+            className="mb-4 rounded-xl bg-[var(--danger-bg)] p-3.5 text-sm text-[var(--danger-text)]"
             role="alert"
           >
             {error} Your activity will refresh automatically.
           </p>
         )}
-        {loading && <p role="status">Loading your activity…</p>}
-        {!loading && (
-          <div className="activity [display:flex] [flex-direction:column] [gap:10px] [margin-top:30px] [&_button]:[display:flex] [&_button]:[align-items:center] [&_button]:[gap:18px] [&_button]:[text-align:left] [&_button]:[padding:20px] [&_small]:[margin-left:auto] [&_small]:[color:var(--muted)] max-[600px]:[&_button]:[flex-wrap:wrap] max-[600px]:[&_small]:[margin:0] [&_button_>span]:[overflow-wrap:anywhere] [&_button_>span]:[min-width:0] [&_.badge]:[margin-left:auto]">
+        {tab === "notifications" && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="m-0 text-xs text-matcha-muted">
+              {unreadCount} unread
+            </p>
+            <div className="flex flex-wrap items-center gap-2.5 text-xs text-matcha-muted">
+              <span>Unread only</span>
+              <Switch
+                aria-label="Unread only"
+                isSelected={unreadOnly}
+                onChange={changeUnreadFilter}
+                size="sm"
+              >
+                <Switch.Control className="!h-5 !w-9 !rounded-full !bg-matcha-border group-data-[selected=true]:!bg-matcha-accent">
+                  <Switch.Thumb className="!size-4 !rounded-full !bg-white !shadow-sm" />
+                </Switch.Control>
+              </Switch>
+              <UiButton
+                disabled={busy || loading || unreadCount === 0}
+                className="min-h-9 rounded-full px-3 text-xs"
+                onClick={() => void run(markAllRead)}
+              >
+                <MailOpen size={14} /> Mark all read
+              </UiButton>
+            </div>
+          </div>
+        )}
+        {loading ? (
+          <p
+            className="py-8 text-center text-sm text-matcha-muted"
+            role="status"
+          >
+            Loading your activity…
+          </p>
+        ) : (
+          <div className="grid gap-4 pt-1">
             {tab === "notifications" && (
               <>
                 <NotificationList
@@ -324,14 +352,14 @@ export function Activity({
                   }}
                 />
                 {!notifications.length && !error && (
-                  <div className="empty [text-align:center] [padding:50px] [background:var(--accent-soft)] [border-radius:15px] [color:var(--muted)]">
-                    <Bell size={32} />
-                    <h2>
+                  <div className="rounded-2xl border border-matcha-border bg-matcha-surface px-5 py-12 text-center text-matcha-muted">
+                    <Check className="mx-auto text-matcha-accent" size={30} />
+                    <h2 className="mb-2 mt-3 text-lg font-semibold text-matcha-text">
                       {unreadOnly
                         ? "You’re all caught up"
                         : "Your story starts here"}
                     </h2>
-                    <p>
+                    <p className="m-0 text-sm">
                       {unreadOnly
                         ? "No unread notifications. Switch off the filter to see your history."
                         : "Profile visits, interest, connections, and messages will appear here."}
@@ -340,6 +368,7 @@ export function Activity({
                 )}
                 {next && (
                   <UiButton
+                    className="mx-auto min-h-10 rounded-full px-4 text-sm"
                     disabled={busy}
                     onClick={() => void run(olderNotifications)}
                   >
@@ -349,33 +378,124 @@ export function Activity({
               </>
             )}
             {tab === "visitors" && (
-              <>
-                {visitors.map((item) => (
-                  <UiButton
-                    key={item.id}
-                    onClick={() => void run(() => openProfile(item.actor))}
-                  >
-                    <Eye size={20} />
-                    <span>
-                      <strong>{item.username}</strong> visited your profile
-                    </span>
-                    <small>
-                      <time dateTime={item.created_at}>
-                        {new Date(item.created_at).toLocaleString()}
-                      </time>
-                    </small>
-                  </UiButton>
-                ))}
-                {!visitors.length && !error && <p>No visitors yet.</p>}
+              <div className="grid gap-4">
+                {visitors.length > 0 ? (
+                  <div className="overflow-hidden rounded-2xl border border-matcha-border bg-matcha-surface">
+                    {visitors.map((item, index) => (
+                      <button
+                        type="button"
+                        className={`flex w-full min-w-0 cursor-pointer items-center gap-3 px-3 py-3.5 text-left transition-colors hover:bg-matcha-raised focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-matcha-accent sm:px-4 ${index ? "border-t border-matcha-border/70" : ""}`}
+                        key={item.id}
+                        onClick={() => void run(() => openProfile(item.actor))}
+                      >
+                        {item.photo_id ? (
+                          <img
+                            className="size-11 shrink-0 rounded-full object-cover sm:size-12"
+                            src={`/api/v1/photos/${item.photo_id}`}
+                            alt=""
+                          />
+                        ) : (
+                          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-matcha-accent/10 text-matcha-accent sm:size-12">
+                            <User size={21} />
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <strong className="block text-sm font-semibold text-matcha-text">
+                            {[item.first_name, item.last_name]
+                              .filter(Boolean)
+                              .join(" ") || item.username}
+                          </strong>
+                          <span className="mt-1 block text-xs text-matcha-muted">
+                            @{item.username} · Visited your profile
+                          </span>
+                        </span>
+                        <time
+                          className="shrink-0 text-[11px] text-matcha-muted sm:text-xs"
+                          dateTime={item.created_at}
+                        >
+                          {activityDateLabel(item.created_at)}
+                        </time>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {!visitors.length && !error && (
+                  <div className="rounded-2xl border border-matcha-border bg-matcha-surface px-5 py-12 text-center text-sm text-matcha-muted">
+                    No visitors yet.
+                  </div>
+                )}
                 {activity?.next_before && (
                   <UiButton
+                    className="mx-auto min-h-10 rounded-full px-4 text-sm"
                     disabled={busy}
                     onClick={() => void run(olderVisitors)}
                   >
                     Older visits
                   </UiButton>
                 )}
-              </>
+              </div>
+            )}
+            {tab === "connections" && (
+              <div className="grid gap-2">
+                {connections.map((item) => (
+                  <article
+                    className="flex min-w-0 flex-wrap items-center gap-3 rounded-2xl border border-matcha-border bg-matcha-surface p-3 sm:flex-nowrap sm:p-4"
+                    key={item.actor}
+                  >
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 basis-[200px] items-center gap-3 text-left focus-visible:rounded-xl focus-visible:outline-2 focus-visible:outline-matcha-accent"
+                      aria-label={`View ${item.first_name} ${item.last_name}’s profile`}
+                      onClick={() => void run(() => openProfile(item.actor))}
+                    >
+                      {item.photo_id ? (
+                        <img
+                          className="size-12 shrink-0 rounded-full object-cover"
+                          src={`/api/v1/photos/${item.photo_id}`}
+                          alt=""
+                        />
+                      ) : (
+                        <span className="grid size-12 shrink-0 place-items-center rounded-full bg-matcha-accent/10 text-matcha-accent">
+                          <User size={21} />
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <strong className="block truncate text-sm font-semibold text-matcha-text">
+                          {[item.first_name, item.last_name]
+                            .filter(Boolean)
+                            .join(" ") || item.username}
+                        </strong>
+                        <span className="mt-1 block truncate text-xs text-matcha-muted">
+                          @{item.username}
+                          {item.city ? ` · ${item.city}` : ""}
+                        </span>
+                      </span>
+                    </button>
+                    <div className="ml-auto flex shrink-0 gap-2">
+                      <UiButton
+                        className="min-h-9 rounded-full !border-matcha-accent !bg-matcha-accent px-3 text-xs !text-white hover:!bg-matcha-accent/90"
+                        onClick={() => openConversation(item.actor)}
+                      >
+                        <MessageCircle size={14} /> Chat
+                      </UiButton>
+                      <UiButton
+                        className="min-h-9 rounded-full px-3 text-xs"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() => changeInterest(item.actor, true))
+                        }
+                      >
+                        Remove interest
+                      </UiButton>
+                    </div>
+                  </article>
+                ))}
+                {!connections.length && !error && (
+                  <p className="py-8 text-center text-sm text-matcha-muted">
+                    Your mutual connections will appear here.
+                  </p>
+                )}
+              </div>
             )}
             {(tab === "likes" || tab === "sent") && (
               <InterestList
@@ -393,11 +513,14 @@ export function Activity({
               <>
                 {blocks.map((item) => (
                   <div
-                    className="blocked-row [display:flex] [align-items:center] [justify-content:space-between] [padding:18px] [border:1px_solid_var(--border)] [background:var(--surface)] [border-radius:10px]"
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-matcha-border bg-matcha-surface p-4"
                     key={item.actor}
                   >
-                    <strong>{item.username}</strong>
+                    <strong className="min-w-0 truncate text-sm text-matcha-text">
+                      @{item.username}
+                    </strong>
                     <UiButton
+                      className="min-h-9 shrink-0 rounded-full px-3 text-xs"
                       disabled={busy}
                       onClick={() =>
                         void run(async () => {
@@ -411,12 +534,16 @@ export function Activity({
                     </UiButton>
                   </div>
                 ))}
-                {!blocks.length && !error && <p>No blocked users.</p>}
+                {!blocks.length && !error && (
+                  <div className="rounded-2xl border border-matcha-border bg-matcha-surface px-5 py-12 text-center text-sm text-matcha-muted">
+                    No blocked users.
+                  </div>
+                )}
               </>
             )}
           </div>
         )}
       </div>
-    </>
+    </section>
   );
 }

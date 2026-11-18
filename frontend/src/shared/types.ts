@@ -62,6 +62,7 @@ export type Notification = {
   actor: number;
   username: string;
   first_name: string;
+  last_name: string;
   photo_id: number | null;
   kind: string;
   is_read: boolean;
@@ -90,6 +91,7 @@ export type Interest = {
   actor: number;
   username: string;
   first_name: string;
+  last_name: string;
   city: string | null;
   photo_id: number | null;
   connected: boolean;
@@ -99,10 +101,14 @@ export type Activity = {
     id: number;
     actor: number;
     username: string;
+    first_name: string;
+    last_name: string;
+    photo_id: number | null;
     created_at: string;
   }[];
   likes: Interest[];
   sent: Interest[];
+  connections: Interest[];
   blocks: { actor: number; username: string }[];
   next_before: number | null;
 };
