@@ -147,6 +147,7 @@ export function UserMap({
   useEffect(() => {
     const instance = map.current;
     if (!instance) return;
+    const canvas = instance.getCanvas();
     const markers: mapboxgl.Marker[] = [];
     const popups: mapboxgl.Popup[] = [];
     const clusterMembers = new Map<number, Set<number>>();
@@ -323,7 +324,7 @@ export function UserMap({
       const cluster = instance.queryRenderedFeatures(event.point, {
         layers: [clusterLayerId],
       });
-      instance.getCanvas().style.cursor = cluster.length ? "pointer" : "";
+      canvas.style.cursor = cluster.length ? "pointer" : "";
     };
 
     const installClusterSource = () => {
@@ -370,15 +371,17 @@ export function UserMap({
     // Loading people must not move the camera away from the saved profile area.
     return () => {
       cancelled = true;
-      instance.off("style.load", installClusterSource);
-      instance.off("render", refreshClusters);
-      instance.off("click", onClusterClick);
-      instance.off("mousemove", updateClusterCursor);
-      instance.getCanvas().style.cursor = "";
-      if (instance.getLayer(countLayerId)) instance.removeLayer(countLayerId);
-      if (instance.getLayer(clusterLayerId))
-        instance.removeLayer(clusterLayerId);
-      if (instance.getSource(sourceId)) instance.removeSource(sourceId);
+      if (map.current === instance) {
+        instance.off("style.load", installClusterSource);
+        instance.off("render", refreshClusters);
+        instance.off("click", onClusterClick);
+        instance.off("mousemove", updateClusterCursor);
+        canvas.style.cursor = "";
+        if (instance.getLayer(countLayerId)) instance.removeLayer(countLayerId);
+        if (instance.getLayer(clusterLayerId))
+          instance.removeLayer(clusterLayerId);
+        if (instance.getSource(sourceId)) instance.removeSource(sourceId);
+      }
       markers.forEach((marker) => marker.remove());
       popups.forEach((popup) => popup.remove());
     };
