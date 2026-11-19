@@ -28,8 +28,30 @@ const nearby = {
   longitude: -7.585,
   photo_id: 22,
 };
+let mapUsersResponse = [
+  nearby,
+  {
+    ...nearby,
+    id: 3,
+    first_name: "Far",
+    city: "Paris",
+    latitude: 48.85,
+    longitude: 2.35,
+  },
+];
 
 test.beforeEach(async ({ page }) => {
+  mapUsersResponse = [
+    nearby,
+    {
+      ...nearby,
+      id: 3,
+      first_name: "Far",
+      city: "Paris",
+      latitude: 48.85,
+      longitude: 2.35,
+    },
+  ];
   await page.route("**/socket.io/**", (route) => route.abort());
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -43,19 +65,7 @@ test.beforeEach(async ({ page }) => {
         path === "/api/v1/me/session" || path === "/api/v1/me"
           ? { user: member, csrf: "test" }
           : path === "/api/v1/map/users"
-            ? {
-                users: [
-                  nearby,
-                  {
-                    ...nearby,
-                    id: 3,
-                    first_name: "Far",
-                    city: "Paris",
-                    latitude: 48.85,
-                    longitude: 2.35,
-                  },
-                ],
-              }
+            ? { users: mapUsersResponse }
             : path === "/api/v1/profiles/2"
               ? {
                   ...nearby,
@@ -174,6 +184,35 @@ test("Mapbox opens at the saved city without reframing for distant people", asyn
   await page.screenshot({ path: testInfo.outputPath("map-card.png") });
   await card.getByRole("link", { name: "Sam Rivera", exact: true }).click();
   await expect(page).toHaveURL(/\/profile\/2$/);
+});
+
+test("nearby people cluster together and expand into avatar markers", async ({
+  page,
+}) => {
+  const colocated = Array.from({ length: 10 }, (_, index) => ({
+    ...nearby,
+    id: index + 2,
+    first_name: `Person${index + 1}`,
+    photo_id: null,
+    latitude: 33.57,
+    longitude: -7.58,
+  }));
+  mapUsersResponse = colocated;
+  await page.goto("/map");
+  const map = page.getByRole("region", {
+    name: "Interactive map of nearby people",
+    exact: true,
+  });
+  const avatars = map.getByRole("button", {
+    name: /^Show Person\d+ Rivera's location$/,
+  });
+  await expect(avatars).toHaveCount(0);
+  const canvas = map.locator(".mapboxgl-canvas");
+  const bounds = (await canvas.boundingBox())!;
+  await canvas.click({
+    position: { x: bounds.width / 2, y: bounds.height / 2 },
+  });
+  await expect(avatars).toHaveCount(10);
 });
 
 test("Mapbox changes style with the theme", async ({ page }) => {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as mapboxgl from "mapbox-gl/esm";
+import type { GeoJSONSourceSpecification } from "mapbox-gl/esm";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { api } from "../../shared/api";
 import { useTheme } from "../../shared/theme";
@@ -7,6 +8,34 @@ import type { MapUser, Me, Runner } from "../../shared/types";
 
 const accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 const unavailable = "The map is currently unavailable. Please try again later.";
+
+type ClusterSource = {
+  getClusterExpansionZoom: (
+    clusterId: number,
+    callback: (error: Error | null, zoom: number) => void,
+  ) => unknown;
+  getClusterLeaves: (
+    clusterId: number,
+    limit: number,
+    offset: number,
+    callback: (
+      error: Error | null,
+      leaves: Array<{ properties?: Record<string, unknown> }> | null,
+    ) => void,
+  ) => unknown;
+};
+
+function getClusterSource(
+  source: mapboxgl.Source | undefined,
+): ClusterSource | null {
+  if (
+    !source ||
+    !("getClusterExpansionZoom" in source) ||
+    !("getClusterLeaves" in source)
+  )
+    return null;
+  return source as unknown as ClusterSource;
+}
 
 function mapAvatar(user: MapUser, size: string) {
   const avatar = document.createElement("span");
@@ -120,6 +149,11 @@ export function UserMap({
     if (!instance) return;
     const markers: mapboxgl.Marker[] = [];
     const popups: mapboxgl.Popup[] = [];
+    const clusterMembers = new Map<number, Set<number>>();
+    const pendingClusters = new Set<number>();
+    const sourceId = "nearby-people";
+    const clusterLayerId = `${sourceId}-clusters`;
+    const countLayerId = `${sourceId}-cluster-count`;
     for (const user of users) {
       const pin = document.createElement("button");
       pin.type = "button";
@@ -196,12 +230,159 @@ export function UserMap({
       );
       popups.push(popup);
     }
+
+    const sourceData = {
+      type: "FeatureCollection",
+      features: users.map((user) => ({
+        type: "Feature",
+        properties: { userId: user.id },
+        geometry: {
+          type: "Point",
+          coordinates: [user.longitude, user.latitude],
+        },
+      })),
+    };
+    let cancelled = false;
+    const refreshClusters = () => {
+      const source = getClusterSource(instance.getSource(sourceId));
+      if (!source) return;
+
+      const features = instance.querySourceFeatures(sourceId);
+      const visibleClusterIds = new Set<number>();
+      for (const feature of features) {
+        const clusterFeature = feature.toJSON() as unknown as {
+          properties?: Record<string, unknown>;
+          geometry?: { coordinates?: number[] };
+        };
+        const properties = clusterFeature.properties;
+        if (!properties?.cluster || typeof properties.cluster_id !== "number")
+          continue;
+        const clusterId = properties.cluster_id;
+        visibleClusterIds.add(clusterId);
+        if (!clusterMembers.has(clusterId) && !pendingClusters.has(clusterId)) {
+          pendingClusters.add(clusterId);
+          source.getClusterLeaves(
+            clusterId,
+            Number(properties.point_count) || users.length,
+            0,
+            (error, leaves) => {
+              pendingClusters.delete(clusterId);
+              if (error || !leaves || cancelled) return;
+              clusterMembers.set(
+                clusterId,
+                new Set(
+                  leaves
+                    .map(
+                      (leaf) =>
+                        (
+                          leaf as unknown as {
+                            properties?: Record<string, unknown>;
+                          }
+                        ).properties?.userId,
+                    )
+                    .filter((id): id is number => typeof id === "number"),
+                ),
+              );
+              refreshClusters();
+            },
+          );
+        }
+      }
+
+      const clusteredUserIds = new Set<number>();
+      for (const clusterId of visibleClusterIds) {
+        clusterMembers
+          .get(clusterId)
+          ?.forEach((id) => clusteredUserIds.add(id));
+      }
+      markers.forEach((marker, index) => {
+        marker.getElement().hidden = clusteredUserIds.has(users[index].id);
+      });
+    };
+    const onClusterClick = (event: mapboxgl.MapMouseEvent) => {
+      if (!instance.getLayer(clusterLayerId)) return;
+      const feature = instance.queryRenderedFeatures(event.point, {
+        layers: [clusterLayerId],
+      })[0];
+      if (!feature) return;
+      const clusterFeature = feature.toJSON() as unknown as {
+        properties?: Record<string, unknown>;
+        geometry?: { coordinates?: [number, number] };
+      };
+      const clusterId = clusterFeature.properties?.cluster_id;
+      const coordinates = clusterFeature.geometry?.coordinates;
+      const source = getClusterSource(instance.getSource(sourceId));
+      if (typeof clusterId !== "number" || !coordinates || !source) return;
+      source.getClusterExpansionZoom(clusterId, (error, zoom) => {
+        if (error || typeof zoom !== "number" || cancelled) return;
+        instance.easeTo({ center: coordinates, zoom, duration: 450 });
+      });
+    };
+    const updateClusterCursor = (event: mapboxgl.MapMouseEvent) => {
+      if (!instance.getLayer(clusterLayerId)) return;
+      const cluster = instance.queryRenderedFeatures(event.point, {
+        layers: [clusterLayerId],
+      });
+      instance.getCanvas().style.cursor = cluster.length ? "pointer" : "";
+    };
+
+    const installClusterSource = () => {
+      if (cancelled) return;
+      if (instance.getSource(sourceId)) return;
+      instance.addSource(sourceId, {
+        type: "geojson",
+        data: sourceData as GeoJSONSourceSpecification["data"],
+        cluster: true,
+        clusterRadius: 60,
+        clusterMaxZoom: 15,
+      });
+      instance.addLayer({
+        id: clusterLayerId,
+        type: "circle",
+        source: sourceId,
+        filter: ["has", "point_count"],
+        paint: {
+          "circle-color": "#883578",
+          "circle-radius": ["step", ["get", "point_count"], 19, 10, 23, 30, 28],
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2,
+        },
+      });
+      instance.addLayer({
+        id: countLayerId,
+        type: "symbol",
+        source: sourceId,
+        filter: ["has", "point_count"],
+        layout: {
+          "text-field": ["get", "point_count_abbreviated"],
+          "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+          "text-size": 12,
+        },
+        paint: { "text-color": "#ffffff" },
+      });
+      instance.once("idle", refreshClusters);
+    };
+    instance.on("style.load", installClusterSource);
+    if (instance.isStyleLoaded()) installClusterSource();
+    instance.on("render", refreshClusters);
+    instance.on("click", onClusterClick);
+    instance.on("mousemove", updateClusterCursor);
     // Loading people must not move the camera away from the saved profile area.
     return () => {
+      cancelled = true;
+      instance.off("style.load", installClusterSource);
+      instance.off("render", refreshClusters);
+      instance.off("click", onClusterClick);
+      instance.off("mousemove", updateClusterCursor);
+      instance.getCanvas().style.cursor = "";
+      if (instance.getLayer(countLayerId)) instance.removeLayer(countLayerId);
+      if (instance.getLayer(clusterLayerId))
+        instance.removeLayer(clusterLayerId);
+      if (instance.getSource(sourceId)) instance.removeSource(sourceId);
       markers.forEach((marker) => marker.remove());
       popups.forEach((popup) => popup.remove());
     };
-  }, [users, me.latitude, me.longitude, openProfile, run]);
+  }, [users, me.latitude, me.longitude, openProfile, run, style]);
 
   if (!hasLocation)
     return (
