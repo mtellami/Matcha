@@ -258,3 +258,60 @@
 :root.dark .user-map .mapboxgl-ctrl-icon {
   filter: invert(1);
 }
+
+/* Slim tracks and round handles used by the Discover filter drawer. */
+.discovery-slider .slider__track {
+  height: 6px;
+  width: calc(100% - 24px);
+  margin-inline: 12px;
+  border-inline-width: 0;
+  background: var(--border);
+}
+.discovery-slider .slider__thumb {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--accent);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 4px var(--shadow);
+}
+.discovery-slider .slider__thumb::after {
+  display: none;
+}
+
+.discovery-filter-drawer[data-entering] {
+  animation: discovery-drawer-in 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.discovery-filter-drawer[data-exiting][data-placement] {
+  animation: discovery-drawer-out 220ms cubic-bezier(0.4, 0, 1, 1);
+}
+.discovery-filter-backdrop[data-entering] {
+  animation-duration: 280ms;
+}
+.discovery-filter-backdrop[data-exiting] {
+  animation-duration: 220ms;
+}
+@keyframes discovery-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes discovery-drawer-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .discovery-filter-drawer[data-entering],
+  .discovery-filter-drawer[data-exiting][data-placement],
+  .discovery-filter-backdrop[data-entering],
+  .discovery-filter-backdrop[data-exiting] {
+    animation: none;
+  }
+}

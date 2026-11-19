@@ -27,13 +27,15 @@ test.beforeEach(async ({ page }) => {
         ? { user: member, csrf: "test" }
         : path === "/api/v1/me/summary"
           ? { messages: 123, notifications: 45 }
-          : path === "/api/v1/profiles/1"
-            ? { ...member, age: null, fame: 0 }
-            : path === "/api/v1/tags"
-              ? { tags: [] }
-              : path === "/api/v1/locations"
-                ? { locations: [] }
-                : {};
+          : path === "/api/v1/profiles"
+            ? { profiles: [], total: 0, page: 1, page_size: 24 }
+            : path === "/api/v1/profiles/1"
+              ? { ...member, age: null, fame: 0 }
+              : path === "/api/v1/tags"
+                ? { tags: [] }
+                : path === "/api/v1/locations"
+                  ? { locations: [] }
+                  : {};
     await route.fulfill({ json: body });
   });
 });
@@ -263,6 +265,15 @@ test("mobile drawer separates actions, traps focus, closes and supports logout",
   await expect(drawer).toBeHidden();
   await expect(page).toHaveURL(/\/profile$/);
   await trigger.click();
+  const profileLink = drawer.getByRole("button", {
+    name: "Profile",
+    exact: true,
+  });
+  await expect(profileLink).toHaveAttribute("aria-current", "page");
+  await expect(profileLink).toHaveClass(/bg-matcha-accent/);
+  await expect(
+    drawer.getByRole("button", { name: "Discover", exact: true }),
+  ).not.toHaveAttribute("aria-current", "page");
   await page.setViewportSize({ width: 820, height: 900 });
   await expect(drawer).toBeHidden();
   expect(

@@ -138,3 +138,65 @@ def test_message_after_cursor_allows_zero_and_non_contiguous_ids():
     for invalid in [None, "", True, -1, "nan", "1.5", 1.5, 9223372036854775808]:
         with pytest.raises(ValueError):
             message_after(invalid)
+
+
+@pytest.fixture
+def search_candidate():
+    return {
+        "first_name": "Yasmine",
+        "last_name": "El Amrani",
+        "username": "yas_27",
+        "age": 27,
+        "fame": 30,
+        "distance": 2,
+        "common_tags": 2,
+        "city": "Rabat",
+        "tags": ["coffee", "music"],
+    }
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["Yasmine", "EL AMRANI", "  Yasmine   El Amrani  ", "YAS_27", "@yas_27"],
+)
+def test_discovery_search_matches_exact_names_and_usernames(query, search_candidate):
+    assert SearchFilters.parse({"q": query}).accepts(search_candidate)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "yas",
+        "amrani",
+        "asmin",
+        "coffee",
+        "#music",
+        "Yasmine coffee",
+        "Yasmine, music",
+        "@Yasmine",
+        ",",
+    ],
+)
+def test_discovery_search_rejects_fragments_and_interests(query, search_candidate):
+    assert not SearchFilters.parse({"q": query}).accepts(search_candidate)
+
+
+def test_discovery_name_search_respects_all_other_filters(search_candidate):
+    assert SearchFilters.parse({"q": "Yasmine", "tags": "coffee"}).accepts(
+        search_candidate
+    )
+    assert not SearchFilters.parse({"q": "Yasmine", "tags": "books"}).accepts(
+        search_candidate
+    )
+    assert not SearchFilters.parse({"q": "Yasmine", "city": "Casablanca"}).accepts(
+        search_candidate
+    )
+    assert SearchFilters.parse({"q": " "}).accepts(search_candidate)
+    with pytest.raises(ValueError):
+        SearchFilters.parse({"q": "x" * 201})
+
+
+def test_discovery_name_search_handles_unicode_and_punctuation(search_candidate):
+    candidate = {**search_candidate, "first_name": "Élodie", "last_name": "O'Connor"}
+    assert SearchFilters.parse({"q": "éLODIE o'CONNOR"}).accepts(candidate)
+    assert not SearchFilters.parse({"q": "Connor"}).accepts(candidate)

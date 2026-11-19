@@ -422,7 +422,7 @@ export function AccountNavigation({
             >
               <button
                 type="button"
-                className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-left hover:bg-matcha-raised"
+                className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-left transition-colors ${profileActive ? "bg-matcha-accent text-[var(--accent-foreground)] shadow-[0_8px_22px_var(--shadow)]" : "hover:bg-matcha-raised"}`}
                 aria-current={profileActive ? "page" : undefined}
                 onClick={() => act(openProfile)}
               >

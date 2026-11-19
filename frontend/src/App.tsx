@@ -480,6 +480,8 @@ export default function App() {
     <UserMap me={me} openProfile={openProfile} run={run} />
   ) : (
     <Discovery
+      viewer={me}
+      openMessage={openConversation}
       openProfile={openProfile}
       completeProfile={() => navigate("profile")}
       run={run}
@@ -537,11 +539,11 @@ export default function App() {
         }
       >
         <Link
-          className={`flex items-center gap-2 font-extrabold tracking-[-1.5px] ${dedicatedAuthPage || publicLandingPage ? "text-[30px]" : "text-2xl"}`}
+          className={`flex items-center gap-2 font-extrabold tracking-[-1.5px] ${dedicatedAuthPage || publicLandingPage ? "text-[26px] sm:text-[30px]" : "text-[21px] sm:text-2xl"}`}
           to="/"
         >
           <Leaf
-            className="text-matcha-accent"
+            className={`size-5 text-matcha-accent ${dedicatedAuthPage || publicLandingPage ? "sm:size-[25px]" : "sm:size-[23px]"}`}
             size={dedicatedAuthPage || publicLandingPage ? 25 : 23}
           />
           matcha

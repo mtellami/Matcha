@@ -42,6 +42,7 @@ class SearchFilters:
     max_fame: int = 100
     min_common_tags: int = 0
     city: str = ""
+    query: str = ""
     tags: tuple[str, ...] = ()
     sort: str = "suggested"
     direction: str = "asc"
@@ -58,6 +59,7 @@ class SearchFilters:
                 max_fame=int(args.get("max_fame", 100)),
                 min_common_tags=int(args.get("min_common_tags", 0)),
                 city=args.get("city", "").strip(),
+                query=" ".join(args.get("q", "").split()),
                 tags=tuple(
                     sorted(
                         set(
@@ -82,6 +84,7 @@ class SearchFilters:
         if (
             not 0 <= values.min_common_tags <= 20
             or len(values.city) > 100
+            or len(values.query) > 200
             or values.page < 1
         ):
             raise ValueError("Invalid search filters")
@@ -100,8 +103,22 @@ class SearchFilters:
         return values
 
     def accepts(self, candidate):
+        first_name = " ".join(candidate.get("first_name", "").split()).casefold()
+        last_name = " ".join(candidate.get("last_name", "").split()).casefold()
+        username = candidate.get("username", "").casefold()
+        query = self.query.casefold()
+        if query.startswith("@"):
+            matches_name = query[1:] == username
+        else:
+            matches_name = query in {
+                first_name,
+                last_name,
+                f"{first_name} {last_name}".strip(),
+                username,
+            }
         return (
-            self.min_age <= candidate["age"] <= self.max_age
+            (not query or matches_name)
+            and self.min_age <= candidate["age"] <= self.max_age
             and self.min_fame <= candidate["fame"] <= self.max_fame
             and candidate["distance"] <= self.radius
             and candidate["common_tags"] >= self.min_common_tags

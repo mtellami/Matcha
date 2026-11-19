@@ -172,6 +172,11 @@ def profiles():
             fail("Complete your profile to discover people")
         rows = conn.execute(
             """SELECT u.id,u.username,u.first_name,u.last_name,u.birth_date,u.gender,u.bio,u.city,u.tags,
+        EXISTS(SELECT 1 FROM presence p JOIN sessions s ON s.token=p.session_token
+               WHERE s.user_id=u.id AND s.expires_at>now() AND p.expires_at>now()) AS online,
+        COALESCE((SELECT json_agg(json_build_object('id', p.id, 'is_primary', p.is_primary)
+                                  ORDER BY p.is_primary DESC, p.position, p.id)
+                  FROM photos p WHERE p.user_id=u.id), '[]'::json) AS photos,
         u.latitude,u.longitude, (SELECT count(*) FROM likes WHERE target=u.id) AS likes,
         EXISTS(SELECT 1 FROM likes WHERE actor=%s AND target=u.id) AS liked,
         (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id
@@ -338,7 +343,8 @@ def like(uid):
                 notify(conn, g.uid, uid, "match" if match else "like")
                 if match:
                     notify(conn, uid, g.uid, "match")
-    return {"message": "Relationship updated"}
+        is_connected = connected(conn, g.uid, uid)
+    return {"message": "Relationship updated", "connected": is_connected}
 
 
 @bp.route("/api/v1/profiles/<int:uid>/block", methods=["POST", "DELETE"])
