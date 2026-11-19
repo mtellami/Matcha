@@ -1,17 +1,14 @@
 import { UiButton } from "./shared/UiButton";
 import { BrandStatement } from "./shared/BrandStatement";
-import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Bell,
-  ChevronDown,
-  Compass,
-  Leaf,
-  LogOut,
-  Map as MapIcon,
-  MessageCircle,
-  Settings as SettingsIcon,
-  User,
-} from "lucide-react";
+  startTransition,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { Leaf } from "lucide-react";
+import { AccountNavigation } from "./shared/AccountNavigation";
 import { io, type Socket } from "socket.io-client";
 import {
   startRealtime,
@@ -95,8 +92,6 @@ export default function App() {
   });
   const [revision, setRevision] = useState(0);
   const callManager = useRef<CallManagerHandle | null>(null);
-  const profileMenuRef = useRef<HTMLDivElement | null>(null);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [realtimeSocket, setRealtimeSocket] = useState<Socket | null>(null);
   const profileReturnPath = useRef("/discover");
@@ -108,23 +103,6 @@ export default function App() {
     if (!isProfileRoute(routePath)) setSelected(null);
   }, [routePath]);
   const busy = pending > 0;
-  const primaryPhoto = me?.photos.find((photo) => photo.is_primary);
-  useEffect(() => {
-    if (!profileMenuOpen) return;
-    function closeOutside(event: PointerEvent) {
-      if (!profileMenuRef.current?.contains(event.target as Node))
-        setProfileMenuOpen(false);
-    }
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setProfileMenuOpen(false);
-    }
-    document.addEventListener("pointerdown", closeOutside);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [profileMenuOpen]);
   const redirectToLogin = useCallback(() => {
     navigateRef.current("/login", { replace: true });
     setSelected(null);
@@ -279,14 +257,12 @@ export default function App() {
       const path = id === me?.id ? "/profile" : `/profile/${id}`;
       if (location.pathname !== path) routerNavigate(path);
       setSelected(person);
-      setProfileMenuOpen(false);
     },
     [me?.id, location.pathname, location.search, routerNavigate],
   );
   const openConversation = useCallback(
     (id: number) => {
       setSelected(null);
-      setProfileMenuOpen(false);
       routerNavigate(`/messages?conversation=${id}`);
     },
     [routerNavigate],
@@ -348,27 +324,6 @@ export default function App() {
     setLink({ action: null, token: null });
     await loadMe();
   }
-  const tabs: {
-    key: View;
-    label: string;
-    Icon: typeof User;
-    count?: number;
-  }[] = [
-    { key: "discover", label: "Discover", Icon: Compass },
-    { key: "map", label: "Map", Icon: MapIcon },
-    {
-      key: "inbox",
-      label: "Messages",
-      Icon: MessageCircle,
-      count: summary.messages,
-    },
-    {
-      key: "notifications",
-      label: "Activity",
-      Icon: Bell,
-      count: summary.notifications,
-    },
-  ];
   const dedicatedAuthPage =
     !me && authOpen && ["/login", "/register"].includes(routePath);
   const publicLandingPage =
@@ -460,6 +415,10 @@ export default function App() {
       key={selected.id}
       person={selected}
       myId={me.id}
+      editProfile={() => {
+        setProfileFocus(null);
+        navigate("profile");
+      }}
       back={backFromProfile}
       run={run}
       changed={refreshSummary}
@@ -539,6 +498,10 @@ export default function App() {
       key={selected.id}
       person={selected}
       myId={me.id}
+      editProfile={() => {
+        setProfileFocus(null);
+        navigate("profile");
+      }}
       back={backFromProfile}
       run={run}
       changed={refreshSummary}
@@ -566,7 +529,7 @@ export default function App() {
       {me && (
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed inset-x-0 top-0 z-[1199] h-28 bg-matcha-bg backdrop-blur-2xl"
+          className="pointer-events-none fixed inset-x-0 top-0 z-[1199] h-[86px] bg-matcha-bg backdrop-blur-2xl"
         />
       )}
       <header
@@ -574,7 +537,7 @@ export default function App() {
           dedicatedAuthPage
             ? "relative z-10 flex h-[82px] shrink-0 items-center justify-between border-b border-matcha-border bg-transparent px-[3.4%]"
             : me
-              ? "fixed left-1/2 top-4 z-[1200] mx-0 mt-0 flex w-[calc(100%-2rem)] max-w-[1280px] -translate-x-1/2 flex-wrap items-center justify-between gap-3 rounded-[24px] border border-matcha-border bg-matcha-surface/95 px-5 py-3 shadow-[0_12px_38px_var(--shadow)] backdrop-blur-2xl lg:flex-nowrap lg:px-8"
+              ? "fixed left-1/2 top-4 z-[1200] mx-0 mt-0 flex w-[calc(100%-2rem)] max-w-[1280px] -translate-x-1/2 items-center justify-between gap-3 rounded-[24px] border border-matcha-border bg-matcha-surface/95 px-5 py-3 shadow-[0_12px_38px_var(--shadow)] backdrop-blur-2xl lg:flex-nowrap lg:px-8"
               : `sticky top-0 z-[1200] flex ${publicLandingPage ? "min-h-[82px] px-[3.4%]" : "min-h-16 px-[5%]"} items-center justify-between gap-5 border-b border-matcha-border bg-matcha-bg py-2`
         }
       >
@@ -588,30 +551,6 @@ export default function App() {
           />
           matcha
         </Link>
-        {me && (
-          <nav
-            className="flex flex-1 justify-center gap-1 max-md:order-last max-md:w-full max-md:flex-none max-md:justify-start max-md:overflow-x-auto"
-            aria-label="Main navigation"
-          >
-            {tabs.map(({ key, label, Icon, count }) => (
-              <UiButton
-                className={`!min-h-11 !shrink-0 !rounded-full px-3.5 text-[15px] ${view === key ? "!border-matcha-accent !bg-matcha-accent !text-[var(--accent-foreground)] !shadow-[0_8px_22px_var(--shadow)] hover:!bg-matcha-accent/90" : "!border-transparent !bg-transparent !text-matcha-muted hover:!bg-matcha-raised"}`}
-                aria-current={view === key ? "page" : undefined}
-                aria-label={count ? `${label}, ${count} unread` : label}
-                key={key}
-                onClick={() => navigate(key)}
-              >
-                <Icon size={18} />
-                <span className="hidden lg:inline">{label}</span>
-                {!!count && (
-                  <span className="badge [background:var(--accent-soft)] [border-radius:20px] [padding:3px_8px] [font-size:11px] [white-space:nowrap]">
-                    {count}
-                  </span>
-                )}
-              </UiButton>
-            ))}
-          </nav>
-        )}
         {dedicatedAuthPage ? (
           <div className="flex items-center gap-5">
             <ThemeSwitch />
@@ -623,87 +562,30 @@ export default function App() {
             </Link>
           </div>
         ) : me ? (
-          <div className="ml-auto flex shrink-0 items-center gap-3">
-            <ThemeSwitch />
-            <div className="relative" ref={profileMenuRef}>
-              <button
-                type="button"
-                className="flex items-center gap-2 rounded-full border border-matcha-border bg-matcha-surface p-1.5 pr-3 text-matcha-text transition-colors hover:bg-matcha-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-matcha-accent"
-                aria-label="Open account menu"
-                aria-haspopup="menu"
-                aria-expanded={profileMenuOpen}
-                onClick={() => setProfileMenuOpen((open) => !open)}
-              >
-                {primaryPhoto ? (
-                  <img
-                    className="size-10 rounded-full object-cover"
-                    src={`/api/v1/photos/${primaryPhoto.id}`}
-                    alt=""
-                  />
-                ) : (
-                  <span className="grid size-10 place-items-center rounded-full bg-matcha-accent font-bold text-matcha-bg">
-                    {[me.first_name, me.last_name]
-                      .filter(Boolean)
-                      .map((name) => name[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase() || me.username.slice(0, 2).toUpperCase()}
-                  </span>
-                )}
-                <ChevronDown size={16} aria-hidden="true" />
-              </button>
-              {profileMenuOpen && (
-                <div
-                  className="absolute right-0 top-full z-[1300] mt-2 grid w-48 gap-1 rounded-2xl border border-matcha-border bg-matcha-surface p-2 shadow-xl"
-                  role="menu"
-                  aria-label="Account menu"
-                >
-                  <button
-                    type="button"
-                    className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-left text-sm text-matcha-text hover:bg-matcha-raised"
-                    role="menuitem"
-                    onClick={() => {
-                      setProfileMenuOpen(false);
-                      void run(async () => openProfile(me.id));
-                    }}
-                  >
-                    <User size={17} /> Profile
-                  </button>
-                  <button
-                    type="button"
-                    className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-left text-sm text-matcha-text hover:bg-matcha-raised"
-                    role="menuitem"
-                    onClick={() => {
-                      setProfileMenuOpen(false);
-                      setProfileFocus(null);
-                      navigate("profile");
-                    }}
-                  >
-                    <SettingsIcon size={17} /> Settings
-                  </button>
-                  <button
-                    type="button"
-                    className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-left text-sm text-matcha-text hover:bg-matcha-raised disabled:opacity-50"
-                    role="menuitem"
-                    disabled={busy}
-                    onClick={() => {
-                      setProfileMenuOpen(false);
-                      void run(async () => {
-                        await api("/auth/logout", "POST");
-                        setMe(null);
-                        setSelected(null);
-                        setCsrf("");
-                        setSummary({ messages: 0, notifications: 0 });
-                        routerNavigate("/", { replace: true });
-                      });
-                    }}
-                  >
-                    <LogOut size={17} /> Log out
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <AccountNavigation
+            me={me}
+            view={view}
+            profileActive={isProfileRoute(routePath)}
+            summary={summary}
+            socket={realtimeSocket}
+            busy={busy}
+            navigate={navigate}
+            openProfile={() => void run(() => openProfile(me.id))}
+            logout={() =>
+              void run(async () => {
+                await api("/auth/logout", "POST");
+                setCsrf("");
+                // Commit the cleared session with the destination route so the
+                // protected profile cannot redirect to login during logout.
+                startTransition(() => {
+                  setMe(null);
+                  setSelected(null);
+                  setSummary({ messages: 0, notifications: 0 });
+                  routerNavigate("/", { replace: true });
+                });
+              })
+            }
+          />
         ) : (
           <div className="ml-auto flex items-center gap-3.5 text-[13px] text-matcha-muted">
             <ThemeSwitch />
@@ -725,9 +607,9 @@ export default function App() {
               : !me && authOpen
                 ? "mx-auto max-w-[1280px] px-5 py-5 sm:px-[45px] sm:py-[52px]"
                 : me && view === "inbox"
-                  ? "mx-auto flex h-dvh min-h-0 max-w-[1280px] flex-col overflow-hidden px-0 pb-0 pt-[152px] md:px-5 md:pb-5 md:pt-28 lg:px-[45px]"
+                  ? "mx-auto flex h-dvh min-h-0 max-w-[1280px] flex-col overflow-hidden px-0 pb-0 pt-28 md:px-5 md:pb-5 lg:px-[45px]"
                   : me
-                    ? "mx-auto min-h-[calc(100vh-180px)] max-w-[1280px] px-[45px] pb-20 pt-36 lg:pt-[120px]"
+                    ? "mx-auto min-h-[calc(100vh-180px)] max-w-[1280px] px-5 pb-20 pt-28 sm:px-[45px] lg:pt-[120px]"
                     : "mx-auto min-h-[calc(100vh-180px)] max-w-[1280px] px-[45px] py-[52px] pb-20"
         }
         aria-busy={busy}

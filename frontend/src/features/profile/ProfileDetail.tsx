@@ -7,7 +7,6 @@ import {
   CalendarDays,
   Check,
   ChevronLeft,
-  Eye,
   Flag,
   Heart,
   Leaf,
@@ -15,6 +14,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Phone,
+  Pencil,
   Star,
   Video,
   X,
@@ -36,6 +36,7 @@ export function ProfileDetail({
   revision,
   person,
   myId,
+  editProfile,
   back,
   run,
   changed,
@@ -47,6 +48,7 @@ export function ProfileDetail({
   revision: number;
   person: Profile;
   myId: number;
+  editProfile: () => void;
   back: () => void;
   run: Runner;
   changed: () => Promise<void>;
@@ -181,13 +183,7 @@ export function ProfileDetail({
   }
   return (
     <>
-      <div
-        className={
-          ownProfile
-            ? "mb-8 grid items-center gap-4 sm:grid-cols-[auto_minmax(0,1fr)]"
-            : "mb-6"
-        }
-      >
+      <div className="mb-6 flex items-center justify-between gap-4">
         <UiButton
           className="min-h-10 justify-self-start rounded-full border-transparent bg-transparent px-2 text-matcha-text hover:bg-matcha-raised"
           onClick={back}
@@ -196,20 +192,12 @@ export function ProfileDetail({
           <span>Back</span>
         </UiButton>
         {ownProfile && (
-          <div className="flex min-h-14 items-center gap-3 rounded-2xl bg-matcha-accent/10 px-5 py-3 text-sm text-matcha-muted">
-            <Eye
-              size={19}
-              className="shrink-0 text-matcha-accent"
-              aria-hidden="true"
-            />
-            <p className="m-0">
-              <strong className="font-semibold text-matcha-text">
-                Preview.
-              </strong>{" "}
-              This is how other members see your profile. Save your changes
-              first.
-            </p>
-          </div>
+          <UiButton
+            className="ml-auto shrink-0 rounded-full"
+            onClick={editProfile}
+          >
+            <Pencil size={16} aria-hidden="true" /> Edit profile
+          </UiButton>
         )}
       </div>
       {error && (
