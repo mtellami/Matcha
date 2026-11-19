@@ -1,11 +1,12 @@
 import sys
-from io import BytesIO
-import storage
 from datetime import date
+from io import BytesIO
 from pathlib import Path
-from PIL import Image, ImageDraw
+
+import storage
+from app import create_photo, db, pool
 from argon2 import PasswordHasher
-from app import db, create_photo, pool
+from PIL import Image, ImageDraw
 
 
 def migrate():
@@ -59,19 +60,15 @@ def migrate():
 
 def seed():
     password = PasswordHasher().hash("Demo!River8Cloud&2026")
-    cities = [
-        ("Casablanca", 33.59, -7.62),
-        ("Rabat", 34.02, -6.84),
-        ("Paris", 48.86, 2.35),
-        ("London", 51.51, -0.13),
-    ]
+    city = "Casablanca"
+    latitude = 33.5731
+    longitude = -7.5898
     with db() as conn:
         for i in range(1, 501):
-            city, lat, lon = cities[i % 4]
             conn.execute(
                 """INSERT INTO users(email,username,first_name,last_name,password_hash,verified,
-              birth_date,gender,bio,city,latitude,longitude,tags)
-              VALUES (%s,%s,%s,%s,%s,true,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+              birth_date,gender,bio,city,latitude,longitude,tags,map_visible)
+              VALUES (%s,%s,%s,%s,%s,true,%s,%s,%s,%s,%s,%s,%s,true) ON CONFLICT DO NOTHING""",
                 (
                     f"demo{i}@example.test",
                     f"demo{i}",
@@ -82,20 +79,42 @@ def seed():
                     "man" if i % 2 else "woman",
                     "Coffee, conversation, and discovering new places.",
                     city,
-                    lat + (i % 10) * 0.001,
-                    lon,
+                    latitude,
+                    longitude,
                     ["coffee", "music" if i % 2 else "hiking"],
                 ),
             )
+        conn.execute(
+            """UPDATE users SET city=%s,latitude=%s,longitude=%s,map_visible=true
+               WHERE username LIKE 'demo%%'""",
+            (city, latitude, longitude),
+        )
     for i in range(1, 501):
         with db() as conn:
             user = conn.execute(
                 "SELECT id FROM users WHERE username=%s", (f"demo{i}",)
             ).fetchone()
-            has_photo = conn.execute(
-                "SELECT 1 FROM photos WHERE user_id=%s", (user["id"],)
-            ).fetchone()
-        if has_photo:
+            photos = conn.execute(
+                "SELECT id,is_primary FROM photos WHERE user_id=%s ORDER BY position,id",
+                (user["id"],),
+            ).fetchall()
+            if photos:
+                primary = next(
+                    (photo for photo in photos if photo["is_primary"]), photos[0]
+                )
+                conn.execute(
+                    "UPDATE photos SET is_primary=false WHERE user_id=%s",
+                    (user["id"],),
+                )
+                conn.execute(
+                    "UPDATE photos SET position=position+1 WHERE user_id=%s AND id<>%s",
+                    (user["id"], primary["id"]),
+                )
+                conn.execute(
+                    "UPDATE photos SET is_primary=true,position=0 WHERE id=%s",
+                    (primary["id"],),
+                )
+        if photos:
             continue
         image = Image.new(
             "RGB",

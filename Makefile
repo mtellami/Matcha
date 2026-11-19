@@ -25,7 +25,7 @@ dev-logs: ## Follow development logs
 	$(DEV) logs -f
 
 dev-seed: ## Seed 500 demo profiles in development only
-	cd backend && set -a && . ../.env && set +a && export DATABASE_URL="$${DATABASE_URL/@db:/@localhost:}" && . .venv/bin/activate && python manage.py seed
+	cd backend && set -a && . ../.env && set +a && export DATABASE_URL="$${DATABASE_URL/@db:/@localhost:}" S3_ENDPOINT_URL="$${S3_ENDPOINT_URL/rustfs:/localhost:}" && . .venv/bin/activate && python manage.py seed
 
 prod: ## Build and start production apps behind Nginx (hosted S3/SMTP)
 	$(PROD) up --build -d --remove-orphans
