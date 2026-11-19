@@ -25,7 +25,9 @@ def test_sent_interest_tracks_matching_and_withdrawal(client, accounts):
     assert client.post(f"/api/v1/profiles/{a}/like", headers=headers).status_code == 200
     headers = sign_in(a)
     activity = client.get("/api/v1/me/activity").json
-    assert activity["sent"][0]["connected"] and activity["likes"][0]["connected"]
+    assert not activity["sent"] and not activity["likes"]
+    assert activity["connections"][0]["actor"] == b
+    assert activity["connections"][0]["connected"]
     assert (
         client.delete(f"/api/v1/profiles/{b}/like", headers=headers).status_code == 200
     )

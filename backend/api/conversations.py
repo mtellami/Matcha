@@ -180,7 +180,13 @@ def send_attachment(uid):
     if len(body) > 4000:
         fail("Message must contain at most 4000 characters", field="body")
     if not body:
-        body = "Photo" if kind == "photo" else "Voice message" if kind == "voice" else filename
+        body = (
+            "Photo"
+            if kind == "photo"
+            else "Voice message"
+            if kind == "voice"
+            else filename
+        )
     client_id = text(request.form.get("client_id"), "Message key", 100)
     object_key = secrets.token_hex(24) + extension
 
@@ -216,12 +222,21 @@ def send_attachment(uid):
             storage.put_object(object_key, contents, content_type)
         except Exception:
             app.logger.exception("Message attachment storage unavailable")
-            fail("Attachment storage is temporarily unavailable. Please try again.", 503)
+            fail(
+                "Attachment storage is temporarily unavailable. Please try again.", 503
+            )
         conn.execute(
             """INSERT INTO message_attachments
                (message_id,filename,display_name,content_type,attachment_kind,size)
                VALUES(%s,%s,%s,%s,%s,%s)""",
-            (message["id"], object_key, filename[:255], content_type, kind, len(contents)),
+            (
+                message["id"],
+                object_key,
+                filename[:255],
+                content_type,
+                kind,
+                len(contents),
+            ),
         )
         conn.execute("DELETE FROM photo_deletions WHERE filename=%s", (object_key,))
         notify(conn, g.uid, uid, "message")
