@@ -150,14 +150,19 @@ export function UserMap({
     const canvas = instance.getCanvas();
     const markers: mapboxgl.Marker[] = [];
     const popups: mapboxgl.Popup[] = [];
-    const clusterMembers = new Map<number, Set<number>>();
-    const pendingClusters = new Set<number>();
+    // Mapbox cluster IDs are only unique within a zoom level. Include the
+    // current cluster zoom in cache keys so a zoom cycle cannot reuse a
+    // different cluster's member list under a recycled ID.
+    const clusterMembers = new Map<string, Set<number>>();
+    const pendingClusters = new Set<string>();
     const sourceId = "nearby-people";
     const clusterLayerId = `${sourceId}-clusters`;
     const countLayerId = `${sourceId}-cluster-count`;
     for (const user of users) {
       const pin = document.createElement("button");
       pin.type = "button";
+      // Keep avatars out of the map until its first cluster pass is complete.
+      pin.hidden = true;
       pin.className =
         "grid size-11 cursor-pointer place-items-center rounded-full border-2 border-matcha-surface bg-matcha-surface p-0 shadow-lg ring-2 ring-matcha-accent/70 transition-shadow hover:ring-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-matcha-accent";
       const fullName = [user.first_name, user.last_name]
@@ -244,33 +249,49 @@ export function UserMap({
       })),
     };
     let cancelled = false;
+    let initialClusterPassComplete = false;
     const refreshClusters = () => {
       const source = getClusterSource(instance.getSource(sourceId));
-      if (!source) return;
+      if (
+        !source ||
+        !instance.getLayer(clusterLayerId) ||
+        !initialClusterPassComplete ||
+        !instance.isSourceLoaded(sourceId)
+      )
+        return;
 
-      const features = instance.querySourceFeatures(sourceId);
-      const visibleClusterIds = new Set<number>();
+      // Only clusters painted in the current viewport should suppress DOM
+      // avatar markers. querySourceFeatures also returns buffered/offscreen
+      // source tiles, which can include stale cluster features at the current
+      // zoom and leave individual markers visible on top of the cluster.
+      const features = instance.queryRenderedFeatures({
+        layers: [clusterLayerId],
+      });
+      const visibleClusterIds = new Set<string>();
       for (const feature of features) {
-        const clusterFeature = feature.toJSON() as unknown as {
-          properties?: Record<string, unknown>;
-          geometry?: { coordinates?: number[] };
-        };
-        const properties = clusterFeature.properties;
+        const properties = feature.toJSON().properties as Record<
+          string,
+          unknown
+        > | null;
         if (!properties?.cluster || typeof properties.cluster_id !== "number")
           continue;
         const clusterId = properties.cluster_id;
-        visibleClusterIds.add(clusterId);
-        if (!clusterMembers.has(clusterId) && !pendingClusters.has(clusterId)) {
-          pendingClusters.add(clusterId);
+        const clusterKey = `${Math.floor(instance.getZoom())}:${clusterId}`;
+        visibleClusterIds.add(clusterKey);
+        if (
+          !clusterMembers.has(clusterKey) &&
+          !pendingClusters.has(clusterKey)
+        ) {
+          pendingClusters.add(clusterKey);
           source.getClusterLeaves(
             clusterId,
             Number(properties.point_count) || users.length,
             0,
             (error, leaves) => {
-              pendingClusters.delete(clusterId);
+              pendingClusters.delete(clusterKey);
               if (error || !leaves || cancelled) return;
               clusterMembers.set(
-                clusterId,
+                clusterKey,
                 new Set(
                   leaves
                     .map(
@@ -290,10 +311,14 @@ export function UserMap({
         }
       }
 
+      // Apply a zoom's visibility in one pass. Otherwise the first leaf
+      // callback can expose markers while sibling clusters are still loading.
+      if ([...visibleClusterIds].some((id) => !clusterMembers.has(id))) return;
+
       const clusteredUserIds = new Set<number>();
-      for (const clusterId of visibleClusterIds) {
+      for (const clusterKey of visibleClusterIds) {
         clusterMembers
-          .get(clusterId)
+          .get(clusterKey)
           ?.forEach((id) => clusteredUserIds.add(id));
       }
       markers.forEach((marker, index) => {
@@ -333,6 +358,7 @@ export function UserMap({
     const installClusterSource = () => {
       if (cancelled) return;
       if (instance.getSource(sourceId)) return;
+      if (!instance.isStyleLoaded()) return;
       instance.addSource(sourceId, {
         type: "geojson",
         data: sourceData as GeoJSONSourceSpecification["data"],
@@ -364,11 +390,25 @@ export function UserMap({
         },
         paint: { "text-color": "#ffffff" },
       });
-      instance.once("idle", refreshClusters);
     };
+    const onIdle = () => {
+      installClusterSource();
+      if (instance.isSourceLoaded(sourceId)) {
+        initialClusterPassComplete = true;
+        refreshClusters();
+      }
+    };
+    // The user request can resolve while Mapbox is still loading its base
+    // style. React then replaces this effect and can miss the one-time
+    // `style.load` event, leaving avatar markers unclustered. Retry on style
+    // readiness and idle until the source has been installed.
     instance.on("style.load", installClusterSource);
+    instance.on("styledata", installClusterSource);
+    instance.on("idle", onIdle);
     if (instance.isStyleLoaded()) installClusterSource();
     instance.on("render", refreshClusters);
+    instance.on("moveend", refreshClusters);
+    instance.on("zoomend", refreshClusters);
     instance.on("click", onClusterClick);
     instance.on("mousemove", updateClusterCursor);
     // Loading people must not move the camera away from the saved profile area.
@@ -376,7 +416,11 @@ export function UserMap({
       cancelled = true;
       if (map.current === instance) {
         instance.off("style.load", installClusterSource);
+        instance.off("styledata", installClusterSource);
+        instance.off("idle", onIdle);
         instance.off("render", refreshClusters);
+        instance.off("moveend", refreshClusters);
+        instance.off("zoomend", refreshClusters);
         instance.off("click", onClusterClick);
         instance.off("mousemove", updateClusterCursor);
         canvas.style.cursor = "";
