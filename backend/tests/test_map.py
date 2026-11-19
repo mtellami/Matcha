@@ -11,10 +11,14 @@ def test_map_users_include_avatar_and_profile_card_fields_without_exposing_hidde
     users, sign_in = accounts
     sign_in(users[0])
     with db() as conn:
+        assert conn.execute(
+            "SELECT map_visible FROM users WHERE id=%s", (users[0],)
+        ).fetchone()["map_visible"]
         conn.execute(
             "UPDATE users SET first_name='Sam',last_name='Rivera',map_visible=true WHERE id=%s",
             (users[1],),
         )
+        conn.execute("UPDATE users SET map_visible=false WHERE id=%s", (users[2],))
     response = client.get("/api/v1/map/users")
     assert response.status_code == 200
     listed = {user["id"]: user for user in response.json["users"]}

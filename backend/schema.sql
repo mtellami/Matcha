@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   tags text[] NOT NULL DEFAULT '{}',
   last_seen timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  map_visible boolean NOT NULL DEFAULT false
+  map_visible boolean NOT NULL DEFAULT true
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
