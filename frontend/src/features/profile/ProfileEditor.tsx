@@ -1,10 +1,10 @@
 import { UiInput, UiTextarea } from "../../shared/UiInput";
 import { UiButton } from "../../shared/UiButton";
 import { UiSelect } from "../../shared/UiSelect";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Crosshair, LockKeyhole, MapPin } from "lucide-react";
 import { api } from "../../shared/api";
-import { nearbyCity, type Location } from "../location/location";
+import { type Location } from "../location/location";
 import type { Me, Runner } from "../../shared/types";
 import { ProfileCompletion } from "./ProfileCompletion";
 import { PhotoGalleryEditor } from "./PhotoGalleryEditor";
@@ -82,7 +82,10 @@ export function ProfileEditor({
     longitude: me.longitude ?? 0,
   });
   const [places, setPlaces] = useState<Location[]>([]);
-  const [placesLoading, setPlacesLoading] = useState(true);
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [placeQuery, setPlaceQuery] = useState("");
+  const selectedPlace = useRef<Location | null>(null);
+  const gpsRequest = useRef<AbortController | null>(null);
   const [placesFailed, setPlacesFailed] = useState(false);
   const [placesRetry, setPlacesRetry] = useState(0);
   const [locationId, setLocationId] = useState<string | null>(null);
@@ -168,74 +171,132 @@ export function ProfileEditor({
   }
   useEffect(() => {
     const controller = new AbortController();
-    api<{ locations: Location[] }>(
-      "/locations",
-      "GET",
-      undefined,
-      controller.signal,
-    )
-      .then((d) => {
-        setPlaces(d.locations);
-        setPlacesFailed(false);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setPlacesFailed(true);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setPlacesLoading(false);
-      });
     api<{ tags: string[] }>("/tags", "GET", undefined, controller.signal)
       .then((d) => setKnownTags(d.tags))
       .catch(() => {});
-    return () => controller.abort();
-  }, [placesRetry]);
+    return () => {
+      controller.abort();
+      gpsRequest.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const query = placeQuery.trim();
+    if (query.length < 3) {
+      setPlacesLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setPlacesLoading(true);
+    setPlacesFailed(false);
+    const timer = window.setTimeout(() => {
+      api<{ locations: Location[] }>(
+        `/locations?q=${encodeURIComponent(query)}`,
+        "GET",
+        undefined,
+        controller.signal,
+      )
+        .then((result) => {
+          if (!controller.signal.aborted) setPlaces(result.locations);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setPlacesFailed(true);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setPlacesLoading(false);
+        });
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [placeQuery, placesRetry]);
+
   function gps() {
     if (!navigator.geolocation) {
       setLocationNote("Geolocation is unavailable. Choose a city instead.");
       return;
     }
+    gpsRequest.current?.abort();
+    const controller = new AbortController();
+    gpsRequest.current = controller;
     setLocationNote("Waiting for location permission…");
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latitude = position.coords.latitude,
-          longitude = position.coords.longitude;
+      async (position) => {
+        if (controller.signal.aborted) return;
+        const { latitude, longitude } = position.coords;
         setCoords({ latitude, longitude });
-        const nearest = nearbyCity(places, latitude, longitude);
-        updateDraft("city", nearest?.city || "");
+        selectedPlace.current = null;
         setLocationId(null);
         setLocationSource("gps");
-        setLocationNote(
-          nearest
-            ? "GPS location received. Check the suggested city or neighborhood."
-            : "Location received. Enter the city or neighborhood for this location.",
-        );
+        setPlaceQuery("");
+        setPlaces([]);
+        setPlacesFailed(false);
+        updateDraft("city", "");
+        setLocationNote("Finding the city for your current location…");
+        try {
+          const result = await api<{ locations: Location[] }>(
+            `/locations?latitude=${latitude}&longitude=${longitude}`,
+            "GET",
+            undefined,
+            controller.signal,
+          );
+          if (controller.signal.aborted) return;
+          updateDraft("city", result.locations[0]?.city || "");
+          setLocationNote(
+            result.locations.length
+              ? "Current location received. Check the suggested city or neighborhood."
+              : "Location received. Enter the city or neighborhood for this location.",
+          );
+        } catch {
+          if (!controller.signal.aborted)
+            setLocationNote(
+              "Location received. Enter the city or neighborhood for this location.",
+            );
+        }
       },
-      () =>
-        setLocationNote(
-          "Location permission denied or unavailable. Choose a city instead.",
-        ),
+      () => {
+        if (!controller.signal.aborted)
+          setLocationNote(
+            "Location permission denied or unavailable. Choose a city instead.",
+          );
+      },
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
     );
   }
-  function updateCity(name: string) {
-    updateDraft("city", name);
-    const selected = places.find(
-      (place) => place.city.toLocaleLowerCase() === name.toLocaleLowerCase(),
-    );
-    if (locationSource === "gps") {
-      setLocationId(null);
-      return;
-    }
+
+  function chooseCity(place: Location) {
+    gpsRequest.current?.abort();
+    selectedPlace.current = place;
+    updateDraft("city", place.city);
     setLocationSource("manual");
-    setLocationId(selected?.id || null);
-    if (selected) {
-      setCoords({ latitude: selected.latitude, longitude: selected.longitude });
-      setLocationNote("Approximate city location selected.");
-    } else {
-      setLocationNote(
-        "Choose a city from the suggestions, or use GPS and enter its city or neighborhood.",
-      );
-    }
+    setLocationId(place.id);
+    setCoords({ latitude: place.latitude, longitude: place.longitude });
+    setPlaceQuery("");
+    setPlaces([place]);
+    setPlacesFailed(false);
+    setLocationNote(
+      "City selected. Save your profile to update your location.",
+    );
+  }
+
+  function updateCity(name: string) {
+    if (selectedPlace.current?.city === name) return;
+    gpsRequest.current?.abort();
+    selectedPlace.current = null;
+    updateDraft("city", name);
+    setLocationId(null);
+    setPlaceQuery(name);
+    setPlaces([]);
+    setPlacesFailed(false);
+    if (locationSource !== "gps") setLocationSource("manual");
+    setLocationNote(
+      locationSource === "gps"
+        ? "Your GPS coordinates will be kept unless you select a different city."
+        : name.trim().length < 3
+          ? "Type at least three characters to search for a city."
+          : "",
+    );
   }
   return (
     <div className="mx-auto w-full max-w-[1280px] space-y-8">
@@ -253,7 +314,7 @@ export function ProfileEditor({
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
-          <div className="flex flex-row items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <UiButton
               type="submit"
               form="profile-form"
@@ -278,7 +339,10 @@ export function ProfileEditor({
         </div>
       </header>
       <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
-        <div className="min-w-0 space-y-6">
+        <aside className="min-w-0 lg:order-2 lg:sticky lg:top-32">
+          <ProfileCompletion me={me} edit={edit} discover={discover} />
+        </aside>
+        <div className="min-w-0 space-y-6 lg:order-1">
           <form
             id="profile-form"
             className="flex min-w-0 flex-col gap-5"
@@ -310,15 +374,14 @@ export function ProfileEditor({
                 payload.latitude = coords.latitude;
                 payload.longitude = coords.longitude;
                 payload.location_source = locationSource;
-                if (locationSource === "manual") {
-                  payload.location_id = places.find(
-                    (place) =>
-                      place.city.toLocaleLowerCase() ===
-                      draft.city.toLocaleLowerCase(),
-                  )?.id;
-                } else if (locationId) {
-                  payload.location_id = locationId;
+                if (locationSource === "manual" && !locationId) {
+                  setLocationNote(
+                    "Choose a city from the suggestions, or use GPS.",
+                  );
+                  document.getElementById("profile-city")?.focus();
+                  return;
                 }
+                if (locationId) payload.location_id = locationId;
               }
               void run(async () => {
                 await api("/me/profile", "PATCH", payload);
@@ -339,13 +402,13 @@ export function ProfileEditor({
                 <h2 className="m-0 text-2xl font-semibold tracking-tight">
                   A little about you
                 </h2>
-                <p className="mb-0 mt-2 text-sm leading-relaxed text-matcha-muted">
+                <p className="mb-0 mt-2 break-words text-sm leading-relaxed text-matcha-muted">
                   You choose what to share. Your email and precise coordinates
                   stay private.
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <label className="grid gap-2 text-[13px] font-semibold text-matcha-text">
+                <label className="grid min-w-0 gap-2 text-[13px] font-semibold text-matcha-text">
                   <span>First name</span>
                   <UiInput
                     name="first_name"
@@ -361,7 +424,7 @@ export function ProfileEditor({
                     maxLength={80}
                   />
                 </label>
-                <label className="grid gap-2 text-[13px] font-semibold text-matcha-text">
+                <label className="grid min-w-0 gap-2 text-[13px] font-semibold text-matcha-text">
                   <span>Last name</span>
                   <UiInput
                     name="last_name"
@@ -462,8 +525,8 @@ export function ProfileEditor({
                   </Calendar>
                 </DatePicker.Popover>
               </DatePicker>
-              <div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 max-[950px]:[grid-template-columns:repeat(2,_1fr)] max-[600px]:[gap:14px]">
-                <label className="grid gap-2 text-[13px] font-semibold text-matcha-text">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="grid min-w-0 gap-2 text-[13px] font-semibold text-matcha-text">
                   <span>Gender</span>
                   <UiSelect
                     name="gender"
@@ -478,7 +541,7 @@ export function ProfileEditor({
                     ]}
                   />
                 </label>
-                <label className="grid gap-2 text-[13px] font-semibold text-matcha-text">
+                <label className="grid min-w-0 gap-2 text-[13px] font-semibold text-matcha-text">
                   <span>Interested in</span>
                   <UiSelect
                     name="preferences"
@@ -504,7 +567,7 @@ export function ProfileEditor({
                   />
                 </label>
               </div>
-              <label className="grid gap-2 text-[13px] font-semibold text-matcha-text">
+              <label className="grid min-w-0 gap-2 text-[13px] font-semibold text-matcha-text">
                 <span>About you</span>
                 <UiTextarea
                   name="bio"
@@ -517,7 +580,7 @@ export function ProfileEditor({
                   placeholder="The things that make you, you."
                 />
               </label>
-              <label className="grid gap-2 text-[13px] font-semibold text-matcha-text">
+              <label className="grid min-w-0 gap-2 text-[13px] font-semibold text-matcha-text">
                 <span>Interests</span>
                 <UiInput
                   id="profile-tags"
@@ -606,8 +669,8 @@ export function ProfileEditor({
                   </p>
                 </div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <label className="grid gap-2 text-[13px] font-semibold text-matcha-text">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:grid-cols-1 sm:gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
+                <label className="grid min-w-0 gap-2 text-[13px] font-semibold text-matcha-text">
                   <span>City or neighborhood</span>
                   <span className="relative block w-full">
                     <MapPin
@@ -616,6 +679,8 @@ export function ProfileEditor({
                       className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-matcha-muted"
                     />
                     <ComboBox
+                      aria-label="City or neighborhood"
+                      allowsEmptyCollection
                       items={places}
                       inputValue={draft.city}
                       selectedKey={locationId}
@@ -624,12 +689,12 @@ export function ProfileEditor({
                         const place = places.find(
                           (item) => item.id === String(key),
                         );
-                        if (place) updateCity(place.city);
+                        if (place) chooseCity(place);
                       }}
                       allowsCustomValue
-                      menuTrigger="input"
+                      menuTrigger="focus"
                       fullWidth
-                      className="w-full"
+                      className="min-w-0 w-full"
                     >
                       <UiInput
                         name="city"
@@ -646,7 +711,18 @@ export function ProfileEditor({
                         placement="bottom start"
                         className="z-[100] w-[var(--trigger-width)] min-w-[var(--trigger-width)] overflow-hidden rounded-xl border border-matcha-border bg-matcha-surface text-matcha-text shadow-xl"
                       >
-                        <ListBox className="max-h-64 overflow-y-auto p-1">
+                        <ListBox
+                          className="max-h-64 overflow-y-auto p-1"
+                          renderEmptyState={() => (
+                            <p className="m-0 px-3 py-2.5 text-sm text-matcha-muted">
+                              {placesLoading
+                                ? "Searching…"
+                                : placeQuery.trim().length < 3
+                                  ? "Type at least three characters."
+                                  : "No suggestions."}
+                            </p>
+                          )}
+                        >
                           {places.map((place) => (
                             <ListBoxItem
                               key={place.id}
@@ -654,10 +730,10 @@ export function ProfileEditor({
                               textValue={place.city}
                               className="cursor-pointer rounded-lg px-3 py-2.5 text-sm outline-none hover:bg-matcha-raised focus:bg-matcha-raised selected:bg-matcha-accent/10"
                             >
-                              <span className="flex w-full items-center justify-between gap-3">
+                              <span className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1">
                                 <span>{place.city}</span>
                                 <span className="text-xs text-matcha-muted">
-                                  {place.country}
+                                  {place.region || place.country}
                                 </span>
                               </span>
                             </ListBoxItem>
@@ -666,32 +742,47 @@ export function ProfileEditor({
                       </ComboBox.Popover>
                     </ComboBox>
                   </span>
+                  <a
+                    href="https://www.mapbox.com/about/maps/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-fit text-[10px] font-normal text-matcha-muted"
+                  >
+                    Search by Mapbox
+                  </a>
                 </label>
                 <UiButton
                   type="button"
                   onClick={gps}
-                  className="min-h-12 rounded-xl px-5"
+                  aria-label="Use current location"
+                  title="Use current location"
+                  className="mt-7 h-12 w-12 min-w-12 cursor-pointer rounded-xl max-sm:!px-0 sm:mt-0 sm:w-auto sm:px-5 xl:mt-7"
                 >
-                  <Crosshair size={16} /> Use current location
+                  <Crosshair
+                    size={20}
+                    aria-hidden="true"
+                    className="shrink-0 sm:size-4"
+                  />
+                  <span className="hidden sm:inline">Use current location</span>
                 </UiButton>
               </div>
               <div
-                className="relative isolate aspect-[2.8/1] min-h-[180px] overflow-hidden rounded-2xl border border-matcha-border bg-matcha-raised sm:min-h-[230px]"
+                className="relative isolate h-52 min-w-0 w-full overflow-hidden rounded-2xl border border-matcha-border bg-matcha-raised sm:h-64"
                 role="img"
                 aria-label="Illustrative map showing an approximate two kilometer area"
                 style={{
                   backgroundImage:
-                    "linear-gradient(12deg, transparent 44%, rgba(255,255,255,.95) 45%, rgba(255,255,255,.95) 48%, transparent 49%), linear-gradient(-5deg, transparent 29%, rgba(255,255,255,.95) 30%, rgba(255,255,255,.95) 34%, transparent 35%), linear-gradient(82deg, transparent 20%, rgba(255,255,255,.95) 21%, rgba(255,255,255,.95) 24%, transparent 25%), linear-gradient(96deg, transparent 43%, rgba(255,255,255,.95) 44%, rgba(255,255,255,.95) 47%, transparent 48%), linear-gradient(4deg, transparent 72%, rgba(255,255,255,.95) 73%, rgba(255,255,255,.95) 76%, transparent 77%)",
+                    "linear-gradient(12deg, transparent 44%, var(--surface) 45%, var(--surface) 48%, transparent 49%), linear-gradient(-5deg, transparent 29%, var(--surface) 30%, var(--surface) 34%, transparent 35%), linear-gradient(82deg, transparent 20%, var(--surface) 21%, var(--surface) 24%, transparent 25%), linear-gradient(96deg, transparent 43%, var(--surface) 44%, var(--surface) 47%, transparent 48%), linear-gradient(4deg, transparent 72%, var(--surface) 73%, var(--surface) 76%, transparent 77%)",
                 }}
               >
-                <div className="absolute left-1/2 top-1/2 grid aspect-square w-[22%] min-w-28 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-dashed border-matcha-accent bg-matcha-accent/15">
+                <div className="absolute left-1/2 top-1/2 grid aspect-square w-28 sm:w-36 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-dashed border-matcha-accent bg-matcha-accent/15">
                   <MapPin
                     size={30}
                     fill="currentColor"
-                    className="text-matcha-accent stroke-white"
+                    className="fill-matcha-accent stroke-matcha-surface"
                   />
                 </div>
-                <span className="absolute bottom-3 left-3 rounded-full border border-matcha-border bg-matcha-surface px-4 py-2 text-xs font-semibold text-matcha-text shadow-sm">
+                <span className="absolute bottom-3 left-3 right-3 w-fit max-w-[calc(100%-1.5rem)] rounded-full border border-matcha-border bg-matcha-surface px-4 py-2 text-xs font-semibold text-matcha-text shadow-sm">
                   Approximate area · about 2 km
                 </span>
               </div>
@@ -699,8 +790,12 @@ export function ProfileEditor({
                 <UiButton
                   type="button"
                   onClick={() => {
+                    gpsRequest.current?.abort();
+                    selectedPlace.current = null;
                     setLocationSource("manual");
                     setLocationId(null);
+                    setPlaceQuery("");
+                    setPlaces([]);
                     updateDraft("city", "");
                     setLocationNote("Choose a city from the suggestions.");
                   }}
@@ -708,14 +803,21 @@ export function ProfileEditor({
                   Choose a city manually instead
                 </UiButton>
               )}
-              {(locationNote || placesFailed) && (
+              {(locationNote ||
+                placesFailed ||
+                placesLoading ||
+                (placeQuery.trim().length >= 3 && places.length === 0)) && (
                 <p
                   className="m-0 text-xs leading-relaxed text-matcha-muted"
                   role="status"
                   aria-live="polite"
                 >
-                  {locationNote ||
-                    "City suggestions are unavailable. You can retry or use GPS."}
+                  {placesLoading
+                    ? "Searching cities…"
+                    : placesFailed
+                      ? "City suggestions are unavailable. You can retry or use GPS."
+                      : locationNote ||
+                        "No matching cities found. Try another name or use GPS."}
                 </p>
               )}
               {placesFailed && !placesLoading && (
@@ -782,12 +884,12 @@ export function ProfileEditor({
               <h2 className="m-0 text-2xl font-semibold tracking-tight">
                 Email address
               </h2>
-              <p className="mb-0 mt-2 text-sm leading-relaxed text-matcha-muted">
+              <p className="mb-0 mt-2 break-words text-sm leading-relaxed text-matcha-muted">
                 Current email: {me.email}. Your new address becomes active after
                 verification.
               </p>
             </div>
-            <label className="grid gap-2 text-[13px] font-semibold text-matcha-text">
+            <label className="grid min-w-0 gap-2 text-[13px] font-semibold text-matcha-text">
               <span>New email</span>
               <UiInput
                 name="email"
@@ -808,9 +910,6 @@ export function ProfileEditor({
             </UiButton>
           </form>
         </div>
-        <aside className="min-w-0 lg:sticky lg:top-32">
-          <ProfileCompletion me={me} edit={edit} discover={discover} />
-        </aside>
       </div>
       {blocker.state === "blocked" && (
         <AlertDialog>

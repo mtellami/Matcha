@@ -477,12 +477,7 @@ export default function App() {
       }}
     />
   ) : view === "map" ? (
-    <UserMap
-      me={me}
-      openProfile={openProfile}
-      manageLocation={() => navigate("profile")}
-      run={run}
-    />
+    <UserMap me={me} openProfile={openProfile} run={run} />
   ) : (
     <Discovery
       openProfile={openProfile}
@@ -606,11 +601,13 @@ export default function App() {
               ? "mx-auto min-h-[calc(100svh-142px)] max-w-[2200px] px-[max(45px,calc((100vw-2200px)/2))] pt-[clamp(56px,8vw,120px)] pb-[70px]"
               : !me && authOpen
                 ? "mx-auto max-w-[1280px] px-5 py-5 sm:px-[45px] sm:py-[52px]"
-                : me && view === "inbox"
-                  ? "mx-auto flex h-dvh min-h-0 max-w-[1280px] flex-col overflow-hidden px-0 pb-0 pt-28 md:px-5 md:pb-5 lg:px-[45px]"
-                  : me
-                    ? "mx-auto min-h-[calc(100vh-180px)] max-w-[1280px] px-5 pb-20 pt-28 sm:px-[45px] lg:pt-[120px]"
-                    : "mx-auto min-h-[calc(100vh-180px)] max-w-[1280px] px-[45px] py-[52px] pb-20"
+                : me && view === "map"
+                  ? "mx-auto flex h-dvh min-h-0 max-w-[1280px] flex-col overflow-hidden px-5 pb-5 pt-28 sm:px-[45px]"
+                  : me && view === "inbox"
+                    ? "mx-auto flex h-dvh min-h-0 max-w-[1280px] flex-col overflow-hidden px-0 pb-0 pt-28 md:px-5 md:pb-5 lg:px-[45px]"
+                    : me
+                      ? "mx-auto min-h-[calc(100vh-180px)] max-w-[1280px] px-5 pb-20 pt-28 sm:px-[45px] lg:pt-[120px]"
+                      : "mx-auto min-h-[calc(100vh-180px)] max-w-[1280px] px-[45px] py-[52px] pb-20"
         }
         aria-busy={busy}
         data-connection-state={me ? connection : undefined}

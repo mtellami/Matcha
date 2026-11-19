@@ -17,6 +17,8 @@ make dev-seed  # Optional: add demo profiles
 in separate terminals with `make backend-dev` and `make frontend-dev`. The
 frontend target installs its locked dependencies with pnpm before starting Vite.
 
+Set `VITE_MAPBOX_ACCESS_TOKEN` in the root `.env` to your Mapbox public browser token (`pk.…`) to enable the map and dynamic city search. The backend accepts `MAPBOX_ACCESS_TOKEN` as an override; otherwise it uses the same public token. Vite reads it from that file; Docker Compose passes it into the frontend build. Restart Vite or rebuild the frontend image after changing it.
+
 Open the app at [http://localhost:8080](http://localhost:8080). The development inbox is at [http://localhost:8025](http://localhost:8025).
 
 ## Architecture

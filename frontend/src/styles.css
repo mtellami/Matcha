@@ -212,3 +212,49 @@
     animation-duration: 1ms;
   }
 }
+
+.user-map .mapboxgl-popup-content,
+.user-map .mapboxgl-ctrl-group {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.user-map .mapboxgl-popup-content {
+  border-radius: 14px;
+  padding: 16px;
+}
+.user-map .mapboxgl-popup-close-button {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 0 14px 0 8px;
+  color: var(--muted);
+  background: transparent;
+  transition:
+    background-color 150ms,
+    color 150ms;
+}
+.user-map .mapboxgl-popup-close-button:hover,
+.user-map .mapboxgl-popup-close-button:focus-visible {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+.user-map .mapboxgl-popup-close-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.user-map .mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
+  border-top-color: var(--surface);
+}
+.user-map .mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
+  border-bottom-color: var(--surface);
+}
+.user-map .mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
+  border-right-color: var(--surface);
+}
+.user-map .mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
+  border-left-color: var(--surface);
+}
+:root.dark .user-map .mapboxgl-ctrl-icon {
+  filter: invert(1);
+}

@@ -1,6 +1,6 @@
-from flask import Blueprint
+import math
+
 from app import (
-    LOCATIONS,
     auth,
     cursor,
     data,
@@ -12,6 +12,8 @@ from app import (
     request,
     text,
 )
+from flask import Blueprint
+from locations import search_locations
 
 bp = Blueprint("activity", __name__)
 
@@ -172,13 +174,28 @@ def tags():
 @bp.get("/api/v1/locations")
 @auth
 def locations():
-    query = request.args.get("q", "").strip().casefold()
-    if len(query) > 100:
-        fail("Location search is too long", field="city")
-    return jsonify(
-        locations=[
-            place
-            for place in LOCATIONS
-            if not query or query in (place["city"] + " " + place["country"]).casefold()
-        ]
-    )
+    if "latitude" in request.args or "longitude" in request.args:
+        try:
+            latitude = float(request.args["latitude"])
+            longitude = float(request.args["longitude"])
+            if not (
+                math.isfinite(latitude)
+                and math.isfinite(longitude)
+                and -90 <= latitude <= 90
+                and -180 <= longitude <= 180
+            ):
+                raise ValueError()
+        except (KeyError, ValueError):
+            fail("Provide valid GPS coordinates", field="city")
+        return jsonify(
+            locations=search_locations(latitude=latitude, longitude=longitude)
+        )
+    query = request.args.get("q", "").strip()
+    if len(query) > 100 or ";" in query:
+        fail(
+            "Location search must contain at most 100 characters and no semicolons",
+            field="city",
+        )
+    if len(query) < 3:
+        return jsonify(locations=[])
+    return jsonify(locations=search_locations(query))

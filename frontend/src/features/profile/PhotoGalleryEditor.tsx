@@ -128,6 +128,7 @@ export function PhotoGalleryEditor({
   } | null>(null);
   const pendingRef = useRef<PendingPhoto[]>([]);
   const [pending, setPending] = useState<PendingPhoto[]>([]);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [activeEditId, setActiveEditId] = useState<string | null>(null);
   const [queueError, setQueueError] = useState("");
@@ -137,6 +138,18 @@ export function PhotoGalleryEditor({
   const activePhotoIndex = activePhoto
     ? pending.findIndex((photo) => photo.id === activePhoto.id)
     : -1;
+
+  const photoKeys = [
+    ...me.photos.map((photo) => `saved:${photo.id}`),
+    ...pending.map((photo) => `pending:${photo.id}`),
+  ];
+  const selectedSlot = Math.max(0, photoKeys.indexOf(selectedPhoto ?? ""));
+  const displaySlots = [
+    selectedSlot,
+    ...Array.from({ length: 5 }, (_, slot) => slot).filter(
+      (slot) => slot !== selectedSlot,
+    ),
+  ];
 
   useEffect(() => {
     pendingRef.current = pending;
@@ -237,12 +250,13 @@ export function PhotoGalleryEditor({
           Your photos
         </h2>
         <p className="mb-0 mt-2 max-w-2xl text-sm leading-relaxed text-matcha-muted">
-          Add up to five. The main photo is the first one people see.
+          Add up to five. Tap a photo to preview it, or its star to make it your
+          main photo.
         </p>
       </div>
 
       <div
-        className={`grid grid-cols-[2fr_1fr_1fr] grid-rows-2 gap-2.5 sm:gap-3 ${dragging ? "rounded-2xl ring-2 ring-matcha-accent ring-offset-4 ring-offset-matcha-surface" : ""}`}
+        className={`grid min-w-0 grid-cols-4 gap-2 sm:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))] sm:grid-rows-2 sm:gap-3 ${dragging ? "rounded-2xl ring-2 ring-matcha-accent ring-offset-4 ring-offset-matcha-surface" : ""}`}
         onDragEnter={(event) => {
           event.preventDefault();
           setDragging(true);
@@ -312,10 +326,14 @@ export function PhotoGalleryEditor({
             addFiles(event.dataTransfer.files);
         }}
       >
-        {Array.from({ length: 5 }, (_, slot) => {
+        {displaySlots.map((slot, displayIndex) => {
           const photo = me.photos[slot];
           const queued = pending[slot - me.photos.length];
-          const isMain = slot === 0;
+          const isMain = displayIndex === 0;
+          const isPrimary = queued
+            ? queued.isPrimary
+            : Boolean(photo?.is_primary) &&
+              !pending.some((item) => item.isPrimary);
           return (
             <div
               key={photo?.id ?? queued?.id ?? `empty-photo-slot-${slot}`}
@@ -331,7 +349,7 @@ export function PhotoGalleryEditor({
                 );
                 event.dataTransfer.effectAllowed = "move";
               }}
-              className={`group relative min-h-24 overflow-hidden rounded-2xl border-2 ${isMain ? "row-span-2 min-h-[250px] sm:min-h-[300px]" : "min-h-[120px]"} ${photo || queued ? "border-matcha-border bg-matcha-bg" : "border-dashed border-matcha-accent/35 bg-matcha-accent/[0.035]"}`}
+              className={`group relative min-w-0 overflow-hidden rounded-2xl border-2 ${isMain ? "col-span-4 aspect-[4/3] sm:col-span-1 sm:row-span-2 sm:aspect-auto sm:min-h-[300px]" : "aspect-square sm:aspect-auto sm:min-h-[120px]"} ${photo || queued ? "border-matcha-border bg-matcha-bg" : "border-dashed border-matcha-accent/35 bg-matcha-accent/[0.035]"}`}
             >
               {photo ? (
                 <>
@@ -341,43 +359,6 @@ export function PhotoGalleryEditor({
                     src={`/api/v1/photos/${photo.id}`}
                     alt={`Your photo ${slot + 1}`}
                   />
-                  {photo.is_primary && (
-                    <span className="absolute left-3 top-3 rounded-full bg-matcha-accent px-3 py-1.5 text-[11px] font-bold tracking-[1.3px] text-white">
-                      MAIN PHOTO
-                    </span>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 flex flex-wrap justify-end gap-2 bg-gradient-to-t from-black/75 to-transparent p-3 pt-10 opacity-100 transition-opacity sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
-                    {!photo.is_primary && (
-                      <UiButton
-                        type="button"
-                        disabled={busy}
-                        className="min-h-9 rounded-full border-white/30 bg-black/45 px-3 text-xs text-white hover:bg-black/70"
-                        aria-label={`Make photo ${slot + 1} your profile picture`}
-                        onClick={() =>
-                          void run(async () => {
-                            await api(`/me/photos/${photo.id}`, "PUT");
-                            await saved();
-                          })
-                        }
-                      >
-                        <Star size={13} /> Main
-                      </UiButton>
-                    )}
-                    <UiButton
-                      type="button"
-                      disabled={busy}
-                      className="min-h-9 rounded-full border-white/30 bg-black/45 px-3 text-xs text-white hover:bg-red-600/90"
-                      aria-label={`Remove photo ${slot + 1}`}
-                      onClick={() =>
-                        void run(async () => {
-                          await api(`/me/photos/${photo.id}`, "DELETE");
-                          await saved();
-                        })
-                      }
-                    >
-                      <Trash2 size={13} />
-                    </UiButton>
-                  </div>
                 </>
               ) : queued ? (
                 <>
@@ -392,28 +373,6 @@ export function PhotoGalleryEditor({
                       transform: `rotate(${queued.rotation}deg) scale(${queued.zoom})`,
                     }}
                   />
-                  {isMain && (
-                    <span className="absolute left-3 top-3 rounded-full bg-matcha-accent px-3 py-1.5 text-[11px] font-bold tracking-[1.3px] text-white">
-                      MAIN PHOTO
-                    </span>
-                  )}
-                  <UiButton
-                    type="button"
-                    disabled={busy}
-                    className="absolute right-2 top-2 size-8 min-h-8 rounded-full border-white/30 bg-black/50 p-0 text-white hover:bg-red-600"
-                    aria-label={`Remove ${queued.file.name} from upload`}
-                    onClick={() => removePending(queued)}
-                  >
-                    <Trash2 size={14} />
-                  </UiButton>
-                  <UiButton
-                    type="button"
-                    disabled={busy}
-                    className="absolute bottom-2 left-2 min-h-8 rounded-full border-white/30 bg-black/50 px-3 text-xs text-white hover:bg-black/70"
-                    onClick={() => setActiveEditId(queued.id)}
-                  >
-                    <Crop size={13} /> Edit photo
-                  </UiButton>
                 </>
               ) : (
                 <button
@@ -425,11 +384,11 @@ export function PhotoGalleryEditor({
                   }
                   disabled={busy || remaining <= pending.length}
                   onClick={() => input.current?.click()}
-                  className={`group flex size-full min-h-[120px] flex-col items-center justify-center gap-3 p-3 text-center text-matcha-accent transition-colors hover:bg-matcha-accent/[0.08] focus-visible:outline-2 focus-visible:outline-matcha-accent disabled:cursor-not-allowed disabled:opacity-50 ${isMain ? "min-h-[250px] sm:min-h-[300px]" : ""}`}
+                  className={`group flex size-full min-w-0 flex-col items-center justify-center gap-3 p-2 text-center text-matcha-accent transition-colors hover:bg-matcha-accent/[0.08] focus-visible:outline-2 focus-visible:outline-matcha-accent disabled:cursor-not-allowed disabled:opacity-50 ${isMain ? "p-5" : ""}`}
                 >
                   {isMain ? (
                     <>
-                      <span className="grid size-14 place-items-center rounded-full bg-white text-matcha-accent shadow-sm">
+                      <span className="grid size-14 place-items-center rounded-full bg-matcha-surface text-matcha-accent shadow-sm">
                         <ImagePlus size={25} />
                       </span>
                       <span className="text-base font-semibold text-matcha-text">
@@ -443,6 +402,84 @@ export function PhotoGalleryEditor({
                     <Plus size={25} strokeWidth={1.8} aria-label="Add photo" />
                   )}
                 </button>
+              )}
+              {(photo || queued) && (
+                <>
+                  <button
+                    type="button"
+                    aria-label={`Preview photo ${slot + 1}`}
+                    aria-pressed={isMain}
+                    onClick={() => setSelectedPhoto(photoKeys[slot])}
+                    className={`absolute inset-0 rounded-xl ${isMain ? "" : "cursor-pointer"} focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-matcha-accent`}
+                  />
+                  {isMain && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label={`Make photo ${slot + 1} your main photo`}
+                        aria-pressed={isPrimary}
+                        disabled={busy || isPrimary}
+                        onClick={() => {
+                          if (queued) {
+                            setPending((current) =>
+                              current.map((item) => ({
+                                ...item,
+                                isPrimary: item.id === queued.id,
+                              })),
+                            );
+                          } else if (photo) {
+                            void run(async () => {
+                              await api(`/me/photos/${photo.id}`, "PUT");
+                              setPending((current) =>
+                                current.map((item) => ({
+                                  ...item,
+                                  isPrimary: false,
+                                })),
+                              );
+                              await saved();
+                            });
+                          }
+                        }}
+                        className="absolute left-0.5 top-0.5 grid size-6 cursor-pointer place-items-center rounded-full bg-matcha-surface/95 text-matcha-accent shadow-sm focus-visible:outline-2 focus-visible:outline-matcha-accent sm:left-2 sm:top-2 sm:size-9"
+                      >
+                        <Star
+                          className="size-4 sm:size-5"
+                          fill={isPrimary ? "currentColor" : "none"}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={
+                          photo
+                            ? `Delete photo ${slot + 1}`
+                            : `Remove ${queued!.file.name} from upload`
+                        }
+                        disabled={busy}
+                        onClick={() => {
+                          if (queued) removePending(queued);
+                          else if (photo)
+                            void run(async () => {
+                              await api(`/me/photos/${photo.id}`, "DELETE");
+                              await saved();
+                            });
+                        }}
+                        className="absolute right-0.5 top-0.5 grid size-6 cursor-pointer place-items-center rounded-full bg-matcha-surface/95 text-matcha-text shadow-sm hover:text-[var(--danger-text)] focus-visible:outline-2 focus-visible:outline-matcha-accent disabled:opacity-50 sm:right-2 sm:top-2 sm:size-9"
+                      >
+                        <Trash2 className="size-3.5 sm:size-4" />
+                      </button>
+                    </>
+                  )}
+                  {queued && isMain && (
+                    <UiButton
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setActiveEditId(queued.id)}
+                      className="absolute bottom-3 left-3 min-h-9 rounded-full bg-matcha-surface text-matcha-text"
+                    >
+                      <Crop size={14} /> Edit photo
+                    </UiButton>
+                  )}
+                </>
               )}
             </div>
           );
@@ -481,7 +518,7 @@ export function PhotoGalleryEditor({
             <strong className="text-matcha-text">
               {pending.length} photo{pending.length === 1 ? "" : "s"} ready.
             </strong>{" "}
-            Select Edit photo on any tile to adjust it.
+            Select a photo to preview it, then choose Edit photo to adjust it.
           </p>
           <UiButton
             type="button"

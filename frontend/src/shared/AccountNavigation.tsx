@@ -385,7 +385,7 @@ export function AccountNavigation({
           onClick={(event) => {
             if (event.target === event.currentTarget) closeDrawer();
           }}
-          className="navigation-drawer fixed inset-y-0 left-[calc(100vw-min(340px,90vw))] right-auto m-0 h-dvh max-h-none w-[min(340px,90vw)] max-w-none border-0 border-l border-matcha-border bg-matcha-surface p-0 text-matcha-text shadow-2xl backdrop:bg-black/40 backdrop:backdrop-blur-sm"
+          className="navigation-drawer fixed inset-y-0 left-[calc(100vw-min(280px,85vw))] right-auto m-0 h-dvh max-h-none w-[min(280px,85vw)] max-w-none border-0 border-l border-matcha-border bg-matcha-surface p-0 text-matcha-text shadow-2xl backdrop:bg-black/40 backdrop:backdrop-blur-sm"
         >
           {open && activityToast}
           <div className="flex min-h-full flex-col p-6">

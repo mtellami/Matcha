@@ -41,6 +41,8 @@ export type Me = {
 export type MapUser = {
   id: number;
   first_name: string;
+  last_name: string;
+  gender: string;
   age: number;
   city: string;
   latitude: number;

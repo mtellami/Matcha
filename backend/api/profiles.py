@@ -1,4 +1,3 @@
-from flask import Blueprint
 from app import (
     BytesIO,
     SearchFilters,
@@ -28,6 +27,7 @@ from app import (
     storage,
     text,
 )
+from flask import Blueprint
 
 bp = Blueprint("profiles", __name__)
 
@@ -230,7 +230,7 @@ def map_users():
             "SELECT id,gender,preferences FROM users WHERE id=%s", (g.uid,)
         ).fetchone()
         rows = conn.execute(
-            """SELECT u.id,u.first_name,u.birth_date,u.city,u.latitude,u.longitude,
+            """SELECT u.id,u.first_name,u.last_name,u.gender,u.birth_date,u.city,u.latitude,u.longitude,
                (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id
                FROM users u
                WHERE u.id<>%s AND u.verified AND u.map_visible
