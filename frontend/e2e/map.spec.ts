@@ -207,6 +207,21 @@ test("nearby people cluster together and expand into avatar markers", async ({
     name: /^Show Person\d+ Rivera's location$/,
   });
   await expect(avatars).toHaveCount(0);
+  const avatarElements = map.locator(
+    "button[aria-label^='Show Person'][aria-label$=\"'s location\"]",
+  );
+  await expect(avatarElements).toHaveCount(10);
+  await expect
+    .poll(() =>
+      avatarElements.evaluateAll((elements) =>
+        elements.every(
+          (element) =>
+            (element as HTMLButtonElement).hidden &&
+            getComputedStyle(element).display === "none",
+        ),
+      ),
+    )
+    .toBe(true);
   const canvas = map.locator(".mapboxgl-canvas");
   const bounds = (await canvas.boundingBox())!;
   await canvas.click({

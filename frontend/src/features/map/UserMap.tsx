@@ -297,7 +297,10 @@ export function UserMap({
           ?.forEach((id) => clusteredUserIds.add(id));
       }
       markers.forEach((marker, index) => {
-        marker.getElement().hidden = clusteredUserIds.has(users[index].id);
+        const element = marker.getElement();
+        const clustered = clusteredUserIds.has(users[index].id);
+        element.hidden = clustered;
+        element.style.display = clustered ? "none" : "";
       });
     };
     const onClusterClick = (event: mapboxgl.MapMouseEvent) => {
