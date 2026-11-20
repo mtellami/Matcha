@@ -1,12 +1,20 @@
+import { useLocation } from "react-router";
+import { GenderIcon } from "../../shared/GenderIcon";
 import { UiInput, UiTextarea } from "../../shared/UiInput";
 import { UiButton } from "../../shared/UiButton";
 import { Dropdown, Tooltip } from "@heroui/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Ban,
   CalendarDays,
   Check,
   ChevronLeft,
+  ChevronRight,
+  Images,
+  Maximize,
+  Navigation,
+  Tag,
+  UserRound,
   Flag,
   Heart,
   Leaf,
@@ -61,6 +69,36 @@ export function ProfileDetail({
     [error, setError] = useState(""),
     [unavailable, setUnavailable] = useState(false),
     [activePhoto, setActivePhoto] = useState(person.photos?.[0]?.id);
+  const [justConnected, setJustConnected] = useState(false);
+  useEffect(() => {
+    if (!justConnected) return;
+    const timer = window.setTimeout(() => setJustConnected(false), 1000);
+    return () => window.clearTimeout(timer);
+  }, [justConnected]);
+  const [messageTooltipOpen, setMessageTooltipOpen] = useState(false);
+  const connectionDialog = useRef<HTMLDialogElement>(null);
+  const photoDialog = useRef<HTMLDialogElement>(null);
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (
+      hash === "#date-plans" &&
+      profile.connected &&
+      !connectionDialog.current?.open
+    ) {
+      connectionDialog.current?.showModal();
+    }
+  }, [hash, profile.connected]);
+  const photos = profile.photos ?? [];
+  const photoIndex = Math.max(
+    0,
+    photos.findIndex((photo) => photo.id === activePhoto),
+  );
+  function movePhoto(direction: number) {
+    if (photos.length)
+      setActivePhoto(
+        photos[(photoIndex + direction + photos.length) % photos.length].id,
+      );
+  }
   const [datePlans, setDatePlans] = useState<DatePlan[]>([]);
   const [dateError, setDateError] = useState("");
   const [datesLoading, setDatesLoading] = useState(false);
@@ -179,11 +217,12 @@ export function ProfileDetail({
       4000,
     );
     setProfile((current) => ({ ...current, ...status }));
+    if (!profile.liked && status.connected) setJustConnected(true);
     await changed();
   }
   return (
     <>
-      <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="profile-back-row mb-6 flex shrink-0 items-center justify-between gap-4">
         <UiButton
           className="min-h-10 justify-self-start rounded-full border-transparent bg-transparent px-2 text-matcha-text hover:bg-matcha-raised"
           onClick={back}
@@ -209,44 +248,129 @@ export function ProfileDetail({
         </p>
       )}
       {!unavailable && (
-        <section className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,.98fr)] lg:gap-12">
-          <div className="min-w-0">
-            <div className="relative mx-auto aspect-[4/5] w-full max-w-[560px] overflow-hidden rounded-[28px] bg-[var(--avatar-bg)] text-matcha-accent shadow-[0_24px_64px_var(--shadow)]">
+        <section className="profile-view">
+          <div className="profile-gallery-panel">
+            <div className="profile-gallery">
               {activePhoto ? (
                 <img
-                  className="absolute inset-0 size-full object-cover"
+                  className="profile-main-photo"
                   src={"/api/v1/photos/" + activePhoto}
-                  alt={`${profile.first_name}’s profile photo`}
+                  alt={`${profile.first_name}’s profile photo ${photoIndex + 1}`}
                 />
               ) : (
-                <div className="grid size-full place-items-center">
-                  <Leaf size={100} />
+                <div className="profile-photo-empty">
+                  <Leaf size={72} />
+                  <span>No photos yet</span>
                 </div>
               )}
-            </div>
-            {(profile.photos?.length || 0) > 1 && (
-              <div className="mx-auto mt-4 flex w-full max-w-[560px] flex-wrap gap-2.5">
-                {profile.photos?.map((photo, index) => (
+              {photos.length > 0 && (
+                <>
+                  <span className="profile-photo-count">
+                    <Images size={18} /> {photoIndex + 1} / {photos.length}
+                  </span>
                   <button
                     type="button"
-                    aria-label={`View ${profile.first_name}’s photo ${index + 1} of ${profile.photos?.length}`}
-                    aria-pressed={activePhoto === photo.id}
-                    key={photo.id}
-                    onClick={() => setActivePhoto(photo.id)}
-                    className={`relative block size-[76px] shrink-0 overflow-hidden rounded-2xl border-2 bg-matcha-surface p-0 transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-matcha-accent ${activePhoto === photo.id ? "border-matcha-accent" : "border-transparent opacity-75 hover:opacity-100"}`}
+                    className="profile-photo-expand"
+                    aria-label="Expand profile photo"
+                    onClick={() => photoDialog.current?.showModal()}
                   >
-                    <img
-                      className="absolute inset-0 block size-full object-cover"
-                      src={"/api/v1/photos/" + photo.id}
-                      alt=""
-                    />
+                    <Maximize size={20} />
                   </button>
-                ))}
-              </div>
-            )}
+                </>
+              )}
+              {photos.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className="profile-photo-prev"
+                    aria-label="Previous photo"
+                    onClick={() => movePhoto(-1)}
+                  >
+                    <ChevronLeft size={24} />
+                  </button>
+                  <button
+                    type="button"
+                    className="profile-photo-next"
+                    aria-label="Next photo"
+                    onClick={() => movePhoto(1)}
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                  <div className="profile-thumbnails">
+                    {photos.map((photo, index) => (
+                      <button
+                        type="button"
+                        aria-label={`View ${profile.first_name}’s photo ${index + 1} of ${photos.length}`}
+                        aria-pressed={activePhoto === photo.id}
+                        key={photo.id}
+                        onClick={() => setActivePhoto(photo.id)}
+                      >
+                        <img src={"/api/v1/photos/" + photo.id} alt="" />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <dialog
+              ref={photoDialog}
+              className="profile-lightbox"
+              aria-label={`${profile.first_name}’s photos`}
+              onClick={(event) => {
+                if (event.target === event.currentTarget)
+                  photoDialog.current?.close();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowLeft") movePhoto(-1);
+                if (event.key === "ArrowRight") movePhoto(1);
+              }}
+            >
+              <button
+                type="button"
+                className="profile-lightbox-close"
+                aria-label="Close photo"
+                onClick={() => photoDialog.current?.close()}
+              >
+                <X size={24} />
+              </button>
+              {activePhoto && (
+                <img
+                  src={"/api/v1/photos/" + activePhoto}
+                  alt={`${profile.first_name}’s profile photo ${photoIndex + 1}`}
+                  onLoad={(event) => {
+                    const image = event.currentTarget;
+                    image.style.setProperty(
+                      "--photo-ratio",
+                      String(image.naturalWidth / image.naturalHeight),
+                    );
+                  }}
+                />
+              )}
+              {photos.length > 1 && (
+                <div className="profile-lightbox-controls">
+                  <button
+                    type="button"
+                    aria-label="Previous photo"
+                    onClick={() => movePhoto(-1)}
+                  >
+                    <ChevronLeft />
+                  </button>
+                  <span>
+                    {photoIndex + 1} / {photos.length}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Next photo"
+                    onClick={() => movePhoto(1)}
+                  >
+                    <ChevronRight />
+                  </button>
+                </div>
+              )}
+            </dialog>
           </div>
-          <div className="min-w-0 lg:pt-2">
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-matcha-muted">
+          <div className="profile-info-panel">
+            <div className="profile-meta flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-matcha-muted">
               {profile.city && (
                 <span className="inline-flex items-center gap-2">
                   <MapPin size={17} className="text-matcha-accent" />
@@ -276,6 +400,12 @@ export function ProfileDetail({
                       new Date(profile.last_seen).toLocaleDateString()
                     : "Offline"}
               </span>
+              {typeof profile.distance === "number" && (
+                <span className="profile-distance">
+                  <Navigation size={16} /> {Math.round(profile.distance)} km
+                  away
+                </span>
+              )}
             </div>
             <h1 className="mb-5 mt-5 text-[clamp(3rem,6vw,5rem)] font-semibold leading-[1.02] tracking-[-.055em]">
               {profile.first_name}
@@ -287,16 +417,20 @@ export function ProfileDetail({
             </h1>
             <div className="flex flex-wrap gap-2">
               {profile.gender && (
-                <span className="rounded-full bg-matcha-accent/10 px-4 py-2 text-sm font-medium text-matcha-text">
-                  {profile.gender}
+                <span className="profile-identity-chip">
+                  <GenderIcon gender={profile.gender} />{" "}
+                  {profile.gender.charAt(0).toUpperCase() +
+                    profile.gender.slice(1)}
                 </span>
               )}
               {profile.preferences.map((preference) => (
-                <span
-                  key={preference}
-                  className="rounded-full bg-matcha-accent/10 px-4 py-2 text-sm font-medium text-matcha-text"
-                >
-                  Interested in {preference.toLowerCase()}
+                <span key={preference} className="profile-identity-chip">
+                  <Heart size={17} aria-hidden="true" /> Interested in{" "}
+                  {preference === "man"
+                    ? "men"
+                    : preference === "woman"
+                      ? "women"
+                      : preference.toLowerCase()}
                 </span>
               ))}
             </div>
@@ -306,14 +440,28 @@ export function ProfileDetail({
               </p>
             )}
             {!ownProfile && (
-              <div className="mt-7 flex flex-wrap items-center gap-3">
+              <div className="profile-actions mt-7 flex flex-wrap items-center gap-3">
                 <UiButton
-                  className="min-h-[54px] min-w-[132px] rounded-2xl !border-matcha-accent !bg-matcha-accent px-6 font-semibold !text-matcha-bg hover:!bg-matcha-accent/90"
-                  disabled={busy}
+                  className="min-h-[54px] min-w-[132px] rounded-2xl !border-matcha-accent !bg-matcha-accent px-6 font-semibold !text-[var(--accent-foreground)] hover:!bg-matcha-accent/90"
+                  disabled={busy || (justConnected && profile.connected)}
                   onClick={() => void run(relationship)}
                 >
-                  <Heart size={18} />
-                  {profile.liked ? "Remove interest" : "Like"}
+                  {justConnected && profile.connected ? (
+                    <Check size={18} />
+                  ) : (
+                    <Heart size={18} />
+                  )}
+                  <span aria-live="polite">
+                    {profile.connected
+                      ? justConnected
+                        ? "Connected"
+                        : "Remove connection"
+                      : profile.liked
+                        ? "Remove interest"
+                        : profile.likes_you
+                          ? "Like back"
+                          : "Like"}
+                  </span>
                 </UiButton>
                 {profile.connected ? (
                   <UiButton
@@ -324,21 +472,29 @@ export function ProfileDetail({
                     Message
                   </UiButton>
                 ) : (
-                  <Tooltip>
-                    <Tooltip.Trigger>
-                      <span tabIndex={0}>
-                        <UiButton
-                          className="min-h-[54px] min-w-[132px] rounded-2xl px-6 font-semibold"
-                          disabled
-                        >
-                          <MessageCircle size={18} />
-                          Message
-                        </UiButton>
-                      </span>
+                  <Tooltip isOpen={messageTooltipOpen}>
+                    <Tooltip.Trigger
+                      tabIndex={0}
+                      aria-disabled="true"
+                      aria-label="Message"
+                      onMouseEnter={() => setMessageTooltipOpen(true)}
+                      onMouseLeave={() => setMessageTooltipOpen(false)}
+                      onFocus={() => setMessageTooltipOpen(true)}
+                      onBlur={() => setMessageTooltipOpen(false)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape")
+                          setMessageTooltipOpen(false);
+                      }}
+                      className="inline-flex min-h-[54px] w-full cursor-default items-center justify-center gap-2 rounded-2xl border border-matcha-border bg-matcha-surface px-6 py-2 font-semibold text-matcha-muted"
+                    >
+                      <MessageCircle size={18} />
+                      Message
                     </Tooltip.Trigger>
-                    <Tooltip.Content>
-                      Like each other to connect. Messaging is available after
-                      you connect.
+                    <Tooltip.Content
+                      placement="top"
+                      className="z-[1500] rounded-lg border border-matcha-border bg-matcha-surface px-3 py-2 text-sm text-matcha-text shadow-md"
+                    >
+                      Like each other to message.
                     </Tooltip.Content>
                   </Tooltip>
                 )}
@@ -389,274 +545,302 @@ export function ProfileDetail({
                 </Dropdown>
               </div>
             )}
-            <div className="mt-8 border-t border-matcha-border pt-6">
-              <h2 className="m-0 text-xs font-bold uppercase tracking-[2px] text-matcha-muted">
-                About
-              </h2>
-              <p className="mb-0 mt-3 whitespace-pre-wrap break-words text-lg leading-relaxed text-matcha-text">
-                {profile.bio || "This person hasn’t added a bio yet."}
-              </p>
-            </div>
-            {profile.tags.length > 0 && (
-              <div className="mt-7">
-                <h2 className="m-0 text-xs font-bold uppercase tracking-[2px] text-matcha-muted">
-                  Interests
+            <div className="profile-about-row">
+              <div className="profile-about">
+                <h2>
+                  <UserRound size={22} aria-hidden="true" /> About me
                 </h2>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <p tabIndex={0} role="region" aria-label="Profile biography">
+                  {profile.bio || "This person hasn’t added a bio yet."}
+                </p>
+              </div>
+              <div className="profile-fame">
+                <h2>
+                  <Star size={22} aria-hidden="true" /> Fame rating
+                </h2>
+                <strong>{profile.fame}</strong>
+              </div>
+            </div>
+            <div className="profile-interests">
+              <h2>
+                <Tag size={22} aria-hidden="true" /> Interests
+              </h2>
+              {profile.tags.length > 0 ? (
+                <div className="profile-interest-list">
                   {profile.tags.map((tag) => (
-                    <span
-                      className="rounded-full border border-matcha-border bg-matcha-accent/5 px-4 py-2 text-sm font-semibold text-matcha-accent"
-                      key={tag}
-                    >
-                      #{tag}
-                    </span>
+                    <span key={tag}>{tag}</span>
                   ))}
                 </div>
-              </div>
-            )}
-            <div className="mt-7 inline-flex items-center gap-3 rounded-2xl border border-matcha-border bg-matcha-surface px-4 py-3">
-              <span className="grid size-11 place-items-center rounded-xl bg-matcha-accent/10 text-matcha-accent">
-                <Star size={21} />
-              </span>
-              <span>
-                <span className="block text-xs text-matcha-muted">
-                  Fame rating
-                </span>
-                <strong className="block text-xl leading-tight text-matcha-text">
-                  {profile.fame}
-                </strong>
-              </span>
+              ) : (
+                <p className="text-sm text-matcha-muted">
+                  No interests added yet.
+                </p>
+              )}
             </div>
             {profile.connected && (
-              <section
-                id="profile-conversation"
-                className="chat mt-10 scroll-mt-32 border-t border-matcha-border pt-6"
-              >
-                <h2 className="m-0 text-xl">Stay connected</h2>
-                <div className="my-3 flex flex-wrap items-center gap-2">
-                  <UiButton
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void run(() => startCall("audio"))}
-                  >
-                    <Phone size={16} /> Audio call
-                  </UiButton>
-                  <UiButton
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void run(() => startCall("video"))}
-                  >
-                    <Video size={16} /> Video call
-                  </UiButton>
-                  <small className="basis-full text-xs leading-relaxed text-matcha-muted">
-                    Your browser will ask for microphone or camera access. Calls
-                    connect peer to peer, so your network address may be visible
-                    to the other caller.
-                  </small>
-                </div>
-                <section
-                  className="my-5 grid min-w-0 gap-4 rounded-2xl border border-matcha-border bg-matcha-surface p-4 sm:p-5"
-                  aria-labelledby="date-planner-title"
+              <>
+                <UiButton
+                  className="profile-connect-button mt-4 w-fit"
+                  onClick={() => connectionDialog.current?.showModal()}
                 >
-                  <div>
-                    <h3
-                      id="date-planner-title"
-                      className="m-0 flex items-center gap-2 text-lg font-semibold"
-                    >
-                      <CalendarDays size={19} /> Plan a date
-                    </h3>
-                    <p className="mb-0 mt-1 text-sm leading-relaxed">
-                      Pick a place and time together. Only this connection can
-                      see the plan.
-                    </p>
-                  </div>
-                  {dateError && (
-                    <p
-                      className="m-0 text-sm text-[var(--danger-text)]"
-                      role="alert"
-                    >
-                      {dateError}
-                    </p>
-                  )}
-                  {datesLoading ? (
-                    <p className="m-0 text-sm text-matcha-muted" role="status">
-                      Loading date plans…
-                    </p>
-                  ) : datePlans.length > 0 ? (
-                    <ul className="m-0 grid min-w-0 list-none gap-2 p-0">
-                      {datePlans.map((plan) => {
-                        const statusLabel =
-                          plan.status === "pending"
-                            ? plan.creator === myId
-                              ? "Waiting for a reply"
-                              : "Invitation"
-                            : plan.status === "accepted"
-                              ? "Confirmed"
-                              : plan.status === "declined"
-                                ? "Declined"
-                                : "Cancelled";
-                        return (
-                          <li
-                            className="flex min-w-0 flex-col gap-3 rounded-xl border border-matcha-border bg-matcha-bg p-3 sm:flex-row sm:items-center sm:justify-between"
-                            key={plan.id}
-                          >
-                            <div className="grid min-w-0 gap-1.5">
-                              <strong className="break-words text-sm font-semibold text-matcha-text">
-                                {plan.title}
-                              </strong>
-                              <span className="flex items-center gap-1.5 text-xs text-matcha-muted">
-                                <CalendarDays size={14} />
-                                {new Date(plan.starts_at).toLocaleString([], {
-                                  dateStyle: "medium",
-                                  timeStyle: "short",
-                                })}
-                              </span>
-                              <span className="flex items-center gap-1.5 text-xs text-matcha-muted">
-                                <MapPin size={14} /> {plan.location}
-                              </span>
-                              {plan.details && (
-                                <p className="m-0 break-words text-xs leading-relaxed">
-                                  {plan.details}
-                                </p>
-                              )}
-                              <small
-                                className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${plan.status === "accepted" ? "bg-[var(--success-bg)] text-[var(--success-text)]" : plan.status === "declined" || plan.status === "cancelled" ? "bg-[var(--danger-bg)] text-[var(--danger-text)]" : "bg-matcha-accent/10 text-matcha-accent"}`}
-                              >
-                                {statusLabel}
-                              </small>
-                            </div>
-                            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                              {plan.status === "pending" &&
-                                plan.invitee === myId && (
-                                  <>
-                                    <UiButton
-                                      type="button"
-                                      aria-label={`Accept ${plan.title} invitation`}
-                                      disabled={busy}
-                                      className="min-h-9 rounded-lg px-3 text-xs"
-                                      onClick={() =>
-                                        void run(() =>
-                                          respondToDate(plan.id, "accepted"),
-                                        )
-                                      }
-                                    >
-                                      <Check size={16} /> Accept
-                                    </UiButton>
-                                    <UiButton
-                                      type="button"
-                                      aria-label={`Decline ${plan.title} invitation`}
-                                      disabled={busy}
-                                      className="min-h-9 rounded-lg px-3 text-xs"
-                                      onClick={() =>
-                                        void run(() =>
-                                          respondToDate(plan.id, "declined"),
-                                        )
-                                      }
-                                    >
-                                      <X size={16} /> Decline
-                                    </UiButton>
-                                  </>
-                                )}
-                              {(plan.status === "pending" ||
-                                plan.status === "accepted") && (
-                                <UiButton
-                                  type="button"
-                                  disabled={busy}
-                                  className="min-h-9 rounded-lg px-3 text-xs"
-                                  onClick={() =>
-                                    void run(() => cancelDate(plan.id))
-                                  }
-                                >
-                                  Cancel plan
-                                </UiButton>
-                              )}
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="m-0 text-sm leading-relaxed text-matcha-muted">
-                      No date plans yet. Start with a place you both like.
-                    </p>
-                  )}
-                  <form
-                    className="grid min-w-0 gap-3 border-t border-matcha-border pt-4"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const form = event.currentTarget;
-                      const values = new FormData(form);
-                      void run(async () => {
-                        await api(`/conversations/${person.id}/dates`, "POST", {
-                          title: values.get("title"),
-                          location: values.get("location"),
-                          starts_at: new Date(
-                            String(values.get("starts_at")),
-                          ).toISOString(),
-                          details: values.get("details") || "",
-                        });
-                        form.reset();
-                        await refreshDatePlans();
-                        notify("Date invitation sent");
-                      });
-                    }}
+                  <CalendarDays size={16} /> Calls &amp; date plans
+                </UiButton>
+                <dialog
+                  ref={connectionDialog}
+                  className="profile-connection-dialog"
+                  aria-label="Calls and date plans"
+                >
+                  <UiButton
+                    className="ml-auto mb-3"
+                    aria-label="Close calls and date plans"
+                    onClick={() => connectionDialog.current?.close()}
                   >
-                    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-                      <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
-                        Plan
-                        <UiInput
-                          name="title"
-                          placeholder="Coffee and a walk"
-                          maxLength={100}
-                          required
-                          className="w-full"
-                        />
-                      </label>
-                      <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
-                        Place
-                        <UiInput
-                          name="location"
-                          placeholder="A café or meeting spot"
-                          maxLength={160}
-                          required
-                          className="w-full"
-                        />
-                      </label>
-                      <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
-                        Date and time
-                        <UiInput
-                          name="starts_at"
-                          type="datetime-local"
-                          min={dateMin}
-                          max={dateMax}
-                          required
-                          className="w-full"
-                        />
-                      </label>
+                    <X size={18} />
+                  </UiButton>
+                  <section id="profile-conversation" className="chat">
+                    <h2 className="m-0 text-xl">Stay connected</h2>
+                    <div className="my-3 flex flex-wrap items-center gap-2">
+                      <UiButton
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void run(() => startCall("audio"))}
+                      >
+                        <Phone size={16} /> Audio call
+                      </UiButton>
+                      <UiButton
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void run(() => startCall("video"))}
+                      >
+                        <Video size={16} /> Video call
+                      </UiButton>
+                      <small className="basis-full text-xs leading-relaxed text-matcha-muted">
+                        Your browser will ask for microphone or camera access.
+                        Calls connect peer to peer, so your network address may
+                        be visible to the other caller.
+                      </small>
                     </div>
-                    <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
-                      A note (optional)
-                      <UiTextarea
-                        name="details"
-                        placeholder="Anything useful to know?"
-                        maxLength={500}
-                        rows={2}
-                        className="w-full"
-                      />
-                    </label>
-                    <UiButton
-                      variant="primary"
-                      className="min-h-11 w-full rounded-xl !border-matcha-accent !bg-matcha-accent font-semibold !text-[var(--accent-foreground)] hover:!bg-matcha-accent/90 sm:w-fit"
-                      disabled={busy}
+                    <section
+                      className="my-5 grid min-w-0 gap-4 rounded-2xl border border-matcha-border bg-matcha-surface p-4 sm:p-5"
+                      aria-labelledby="date-planner-title"
                     >
-                      Send date invitation
-                    </UiButton>
-                    <small className="text-xs text-matcha-muted">
-                      Plans can be scheduled up to 90 days ahead.
-                    </small>
-                  </form>
-                </section>
-              </section>
+                      <div>
+                        <h3
+                          id="date-planner-title"
+                          className="m-0 flex items-center gap-2 text-lg font-semibold"
+                        >
+                          <CalendarDays size={19} /> Plan a date
+                        </h3>
+                        <p className="mb-0 mt-1 text-sm leading-relaxed">
+                          Pick a place and time together. Only this connection
+                          can see the plan.
+                        </p>
+                      </div>
+                      {dateError && (
+                        <p
+                          className="m-0 text-sm text-[var(--danger-text)]"
+                          role="alert"
+                        >
+                          {dateError}
+                        </p>
+                      )}
+                      {datesLoading ? (
+                        <p
+                          className="m-0 text-sm text-matcha-muted"
+                          role="status"
+                        >
+                          Loading date plans…
+                        </p>
+                      ) : datePlans.length > 0 ? (
+                        <ul className="m-0 grid min-w-0 list-none gap-2 p-0">
+                          {datePlans.map((plan) => {
+                            const statusLabel =
+                              plan.status === "pending"
+                                ? plan.creator === myId
+                                  ? "Waiting for a reply"
+                                  : "Invitation"
+                                : plan.status === "accepted"
+                                  ? "Confirmed"
+                                  : plan.status === "declined"
+                                    ? "Declined"
+                                    : "Cancelled";
+                            return (
+                              <li
+                                className="flex min-w-0 flex-col gap-3 rounded-xl border border-matcha-border bg-matcha-bg p-3 sm:flex-row sm:items-center sm:justify-between"
+                                key={plan.id}
+                              >
+                                <div className="grid min-w-0 gap-1.5">
+                                  <strong className="break-words text-sm font-semibold text-matcha-text">
+                                    {plan.title}
+                                  </strong>
+                                  <span className="flex items-center gap-1.5 text-xs text-matcha-muted">
+                                    <CalendarDays size={14} />
+                                    {new Date(plan.starts_at).toLocaleString(
+                                      [],
+                                      {
+                                        dateStyle: "medium",
+                                        timeStyle: "short",
+                                      },
+                                    )}
+                                  </span>
+                                  <span className="flex items-center gap-1.5 text-xs text-matcha-muted">
+                                    <MapPin size={14} /> {plan.location}
+                                  </span>
+                                  {plan.details && (
+                                    <p className="m-0 break-words text-xs leading-relaxed">
+                                      {plan.details}
+                                    </p>
+                                  )}
+                                  <small
+                                    className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${plan.status === "accepted" ? "bg-[var(--success-bg)] text-[var(--success-text)]" : plan.status === "declined" || plan.status === "cancelled" ? "bg-[var(--danger-bg)] text-[var(--danger-text)]" : "bg-matcha-accent/10 text-matcha-accent"}`}
+                                  >
+                                    {statusLabel}
+                                  </small>
+                                </div>
+                                <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                                  {plan.status === "pending" &&
+                                    plan.invitee === myId && (
+                                      <>
+                                        <UiButton
+                                          type="button"
+                                          aria-label={`Accept ${plan.title} invitation`}
+                                          disabled={busy}
+                                          className="min-h-9 rounded-lg px-3 text-xs"
+                                          onClick={() =>
+                                            void run(() =>
+                                              respondToDate(
+                                                plan.id,
+                                                "accepted",
+                                              ),
+                                            )
+                                          }
+                                        >
+                                          <Check size={16} /> Accept
+                                        </UiButton>
+                                        <UiButton
+                                          type="button"
+                                          aria-label={`Decline ${plan.title} invitation`}
+                                          disabled={busy}
+                                          className="min-h-9 rounded-lg px-3 text-xs"
+                                          onClick={() =>
+                                            void run(() =>
+                                              respondToDate(
+                                                plan.id,
+                                                "declined",
+                                              ),
+                                            )
+                                          }
+                                        >
+                                          <X size={16} /> Decline
+                                        </UiButton>
+                                      </>
+                                    )}
+                                  {(plan.status === "pending" ||
+                                    plan.status === "accepted") && (
+                                    <UiButton
+                                      type="button"
+                                      disabled={busy}
+                                      className="min-h-9 rounded-lg px-3 text-xs"
+                                      onClick={() =>
+                                        void run(() => cancelDate(plan.id))
+                                      }
+                                    >
+                                      Cancel plan
+                                    </UiButton>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="m-0 text-sm leading-relaxed text-matcha-muted">
+                          No date plans yet. Start with a place you both like.
+                        </p>
+                      )}
+                      <form
+                        className="grid min-w-0 gap-3 border-t border-matcha-border pt-4"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const form = event.currentTarget;
+                          const values = new FormData(form);
+                          void run(async () => {
+                            await api(
+                              `/conversations/${person.id}/dates`,
+                              "POST",
+                              {
+                                title: values.get("title"),
+                                location: values.get("location"),
+                                starts_at: new Date(
+                                  String(values.get("starts_at")),
+                                ).toISOString(),
+                                details: values.get("details") || "",
+                              },
+                            );
+                            form.reset();
+                            await refreshDatePlans();
+                            notify("Date invitation sent");
+                          });
+                        }}
+                      >
+                        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                          <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
+                            Plan
+                            <UiInput
+                              name="title"
+                              placeholder="Coffee and a walk"
+                              maxLength={100}
+                              required
+                              className="w-full"
+                            />
+                          </label>
+                          <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
+                            Place
+                            <UiInput
+                              name="location"
+                              placeholder="A café or meeting spot"
+                              maxLength={160}
+                              required
+                              className="w-full"
+                            />
+                          </label>
+                          <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
+                            Date and time
+                            <UiInput
+                              name="starts_at"
+                              type="datetime-local"
+                              min={dateMin}
+                              max={dateMax}
+                              required
+                              className="w-full"
+                            />
+                          </label>
+                        </div>
+                        <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
+                          A note (optional)
+                          <UiTextarea
+                            name="details"
+                            placeholder="Anything useful to know?"
+                            maxLength={500}
+                            rows={2}
+                            className="w-full"
+                          />
+                        </label>
+                        <UiButton
+                          variant="primary"
+                          className="min-h-11 w-full rounded-xl !border-matcha-accent !bg-matcha-accent font-semibold !text-[var(--accent-foreground)] hover:!bg-matcha-accent/90 sm:w-fit"
+                          disabled={busy}
+                        >
+                          Send date invitation
+                        </UiButton>
+                        <small className="text-xs text-matcha-muted">
+                          Plans can be scheduled up to 90 days ahead.
+                        </small>
+                      </form>
+                    </section>
+                  </section>
+                </dialog>
+              </>
             )}
           </div>
         </section>

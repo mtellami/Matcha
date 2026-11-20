@@ -1,3 +1,4 @@
+import { notificationAction } from "./notification-action";
 import { useEffect, useState } from "react";
 import type { Socket } from "socket.io-client";
 import { api } from "../../shared/api";
@@ -13,15 +14,19 @@ const descriptions: Record<string, string> = {
   date_response: "responded to a date plan",
 };
 
-export function useActivityToast(socket: Socket | null) {
-  const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+export function useActivityToast(socket: Socket | null, paused = false) {
+  const [toast, setToast] = useState<{
+    id: number;
+    kind: string;
+    text: string;
+    action: ReturnType<typeof notificationAction>;
+  } | null>(null);
   useEffect(() => {
     setToast(null);
     if (!socket) return;
     const controller = new AbortController();
     const seen = new Set<number>();
     let latest = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     async function receive(event: { id?: unknown } | null) {
       if (!event || !Number.isSafeInteger(event.id)) return;
       const id = event.id as number;
@@ -47,10 +52,10 @@ export function useActivityToast(socket: Socket | null) {
           item.username;
         setToast({
           id,
+          kind: item.kind,
+          action: notificationAction(item),
           text: `${name} ${descriptions[item.kind] || "updated your activity"}`,
         });
-        clearTimeout(timer);
-        timer = setTimeout(() => setToast(null), 3000);
       } catch {
         // Activity remains available in the drawer if the toast cannot load.
       }
@@ -58,9 +63,13 @@ export function useActivityToast(socket: Socket | null) {
     socket.on("notification", receive);
     return () => {
       controller.abort();
-      clearTimeout(timer);
       socket.off("notification", receive);
     };
   }, [socket]);
+  useEffect(() => {
+    if (!toast || paused) return;
+    const timer = setTimeout(() => setToast(null), 8000);
+    return () => clearTimeout(timer);
+  }, [toast, paused]);
   return { toast, dismissToast: () => setToast(null) };
 }

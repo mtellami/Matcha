@@ -290,7 +290,7 @@ test("mobile drawer separates actions, traps focus, closes and supports logout",
   await expect(page).toHaveURL(/\/$/);
 });
 
-test("new activity appears as a toast for three seconds without replaying on login", async ({
+test("activity toasts offer related actions, pause on focus, and avoid duplicate events", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 812 });
@@ -326,20 +326,19 @@ test("new activity appears as a toast for three seconds without replaying on log
       });
     } else pending = route;
   });
+  const notification = {
+    id: 500,
+    actor: 2,
+    first_name: "Jamie",
+    last_name: "Green",
+    username: "jamie",
+    kind: "like",
+    is_read: false,
+  };
   await page.route("**/api/v1/notifications", (route) =>
     route.fulfill({
       json: {
-        notifications: [
-          {
-            id: 500,
-            actor: 2,
-            first_name: "Jamie",
-            last_name: "Green",
-            username: "jamie",
-            kind: "like",
-            is_read: false,
-          },
-        ],
+        notifications: [{ ...notification }],
       },
     }),
   );
@@ -354,11 +353,72 @@ test("new activity appears as a toast for three seconds without replaying on log
   await expect(toast).toHaveCount(0);
   send('42["notification",{"id":500,"kind":"like","actor":2}]');
   await expect(toast).toBeVisible();
+  await expect(toast.locator("svg.lucide-heart")).toHaveCount(1);
+  await expect(toast.getByText("View profile", { exact: true })).toHaveCount(0);
   const started = Date.now();
-  await expect(toast).toBeHidden({ timeout: 4500 });
-  expect(Date.now() - started).toBeGreaterThan(2500);
+  await expect(
+    toast.getByRole("link", { name: "Jamie Green liked your profile" }),
+  ).toHaveAttribute("href", "/profile/2");
+  await expect(toast).toBeHidden({ timeout: 9500 });
+  expect(Date.now() - started).toBeGreaterThan(7000);
   send('42["notification",{"id":500,"kind":"like","actor":2}]');
   await expect(toast).toHaveCount(0);
+
+  await page.route("**/api/v1/conversations", (route) =>
+    route.fulfill({ json: { conversations: [] } }),
+  );
+  await page.route("**/api/v1/conversations/2/messages?*", (route) =>
+    route.fulfill({ json: { messages: [], latest: 0, next_before: null } }),
+  );
+  notification.id = 501;
+  notification.kind = "message";
+  send('42["notification",{"id":501}]');
+  const messageToast = page
+    .getByRole("status")
+    .filter({ hasText: "Jamie Green sent you a message" });
+  const action = messageToast.getByRole("link", {
+    name: "Jamie Green sent you a message",
+  });
+  await expect(action).toHaveAttribute("href", "/messages?conversation=2");
+  await expect(messageToast.locator("svg.lucide-message-circle")).toHaveCount(
+    1,
+  );
+  await page.clock.install();
+  await action.focus();
+  await page.clock.fastForward(9000);
+  await expect(action).toBeVisible();
+  await action.click();
+  await expect(page).toHaveURL(/\/messages\?conversation=2$/);
+  await expect(messageToast).toHaveCount(0);
+
+  await page.route("**/api/v1/profiles/2", (route) =>
+    route.fulfill({
+      json: {
+        ...member,
+        id: 2,
+        first_name: "Jamie",
+        age: 24,
+        fame: 0,
+        connected: true,
+      },
+    }),
+  );
+  await page.route("**/api/v1/profiles/2/status", (route) =>
+    route.fulfill({ json: { connected: true } }),
+  );
+  await page.route("**/api/v1/conversations/2/dates", (route) =>
+    route.fulfill({ json: { events: [] } }),
+  );
+  notification.id = 502;
+  notification.kind = "date_invite";
+  send('42["notification",{"id":502}]');
+  await page
+    .getByRole("link", { name: "Jamie Green invited you to plan a date" })
+    .click();
+  await expect(page).toHaveURL(/\/profile\/2#date-plans$/);
+  await expect(
+    page.getByRole("dialog", { name: "Calls and date plans" }),
+  ).toBeVisible();
 });
 
 test("active Activity count stays readable in both themes", async ({

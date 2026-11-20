@@ -107,3 +107,15 @@ test("cancelling a conversation stops recovery requests", async () => {
     { name: "AbortError" },
   );
 });
+
+test("message polling reports a disconnect even when there are no new messages", async () => {
+  const result = await messageUpdates(2, 12, undefined, async () => ({
+    connected: false,
+    messages: [],
+    next_before: null,
+    next_after: null,
+  }));
+  assert.equal(result.connected, false);
+  assert.equal(result.latest, 12);
+  assert.deepEqual(result.messages, []);
+});

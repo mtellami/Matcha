@@ -339,10 +339,17 @@ export function ProfileEditor({
         </div>
       </header>
       <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
-        <aside className="min-w-0 lg:order-2 lg:sticky lg:top-32">
+        <aside className="order-2 min-w-0 lg:sticky lg:top-32">
           <ProfileCompletion me={me} edit={edit} discover={discover} />
         </aside>
-        <div className="min-w-0 space-y-6 lg:order-1">
+        <div className="order-1 min-w-0 space-y-6">
+          <PhotoGalleryEditor
+            me={me}
+            fieldErrors={fieldErrors}
+            run={run}
+            saved={saved}
+            busy={busy}
+          />
           <form
             id="profile-form"
             className="flex min-w-0 flex-col gap-5"
@@ -859,13 +866,6 @@ export function ProfileEditor({
               </p>
             </fieldset>
           </form>
-          <PhotoGalleryEditor
-            me={me}
-            fieldErrors={fieldErrors}
-            run={run}
-            saved={saved}
-            busy={busy}
-          />
           <form
             className="flex min-w-0 flex-col gap-5 rounded-3xl border border-matcha-border bg-matcha-surface p-5 shadow-[0_16px_48px_var(--shadow)] sm:p-8"
             onSubmit={(event) => {

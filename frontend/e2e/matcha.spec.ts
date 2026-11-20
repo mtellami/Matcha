@@ -481,7 +481,7 @@ test("mutual interest enables chat and messages arrive within ten seconds", asyn
           `/api/v1/conversations/${accountA.user.id}/messages`,
         )
       ).status(),
-    ).toBe(403);
+    ).toBe(200);
     await expect(
       pageB.getByRole("textbox", { name: "Message", exact: true }),
     ).toHaveCount(0);

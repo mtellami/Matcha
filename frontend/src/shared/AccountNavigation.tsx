@@ -1,7 +1,13 @@
+import { Link } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Bell,
+  Heart,
+  Eye,
+  Link2,
+  Unlink,
+  CalendarDays,
   Check,
   ChevronRight,
   Moon,
@@ -18,6 +24,16 @@ import { useActivityToast } from "../features/activity/useActivityToast";
 import type { Me } from "./types";
 import { Dropdown } from "@heroui/react";
 import { useTheme } from "./theme";
+
+const activityIcons: Record<string, typeof Bell> = {
+  visit: Eye,
+  like: Heart,
+  match: Link2,
+  message: MessageCircle,
+  disconnect: Unlink,
+  date_invite: CalendarDays,
+  date_response: CalendarDays,
+};
 
 type Destination = "discover" | "map" | "inbox" | "notifications";
 const iconButton =
@@ -44,7 +60,18 @@ export function AccountNavigation({
   logout: () => void;
   socket: Socket | null;
 }) {
-  const { toast, dismissToast } = useActivityToast(socket);
+  const [toastHovered, setToastHovered] = useState(false);
+  const [toastFocused, setToastFocused] = useState(false);
+  const { toast, dismissToast } = useActivityToast(
+    socket,
+    toastHovered || toastFocused,
+  );
+  useEffect(() => {
+    if (!toast) {
+      setToastHovered(false);
+      setToastFocused(false);
+    }
+  }, [toast]);
   const { resolvedTheme, setTheme } = useTheme();
   const themeMenu = useRef<HTMLDivElement>(null);
   const themeTrigger = useRef<HTMLButtonElement>(null);
@@ -210,23 +237,40 @@ export function AccountNavigation({
       ))}
     </nav>
   );
+  const ToastIcon = activityIcons[toast?.kind ?? ""] ?? Bell;
   const activityToast = toast && (
     <div
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      className={`${open ? "absolute inset-x-4 top-20" : "fixed right-4 top-24 w-[calc(100%-2rem)] max-w-sm"} z-[1400] flex items-center gap-3 rounded-2xl border border-matcha-border bg-matcha-surface p-4 text-sm text-matcha-text shadow-xl`}
+      onMouseEnter={() => setToastHovered(true)}
+      onMouseLeave={() => setToastHovered(false)}
+      onFocus={() => setToastFocused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget))
+          setToastFocused(false);
+      }}
+      className={`${open ? "absolute inset-x-4 top-20" : "fixed right-4 top-24 w-[calc(100%-2rem)] max-w-sm"} z-[1400] flex items-center rounded-2xl border border-matcha-border bg-matcha-surface text-sm text-matcha-text shadow-xl`}
     >
-      <Bell
-        size={18}
-        className="shrink-0 text-matcha-accent"
-        aria-hidden="true"
-      />
-      <span className="min-w-0 flex-1 break-words">{toast.text}</span>
+      <Link
+        to={toast.action.href}
+        onClick={() => {
+          dismissToast();
+          closeDrawer();
+        }}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-4 pl-4 pr-14 text-left hover:bg-matcha-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-matcha-accent"
+      >
+        <ToastIcon
+          size={20}
+          className="shrink-0 text-matcha-accent"
+          aria-hidden="true"
+        />
+        <span className="min-w-0 flex-1 break-words">{toast.text}</span>
+      </Link>
       <button
         type="button"
         aria-label="Dismiss activity notification"
-        className={`${iconButton} size-7`}
+        className={`${iconButton} absolute right-3 top-1/2 size-7 -translate-y-1/2`}
         onClick={dismissToast}
       >
         <X size={14} aria-hidden="true" />

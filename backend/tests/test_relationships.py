@@ -351,3 +351,141 @@ def test_duplicate_username_returns_field_feedback(client, accounts):
     assert (
         response.status_code == 409 and "username" in response.json["error"]["fields"]
     )
+
+
+def test_unlike_preserves_read_only_history_for_both_participants(client, accounts):
+    from app import db
+
+    users, sign_in = accounts
+    a, b, outsider = users
+    connect(client, users, sign_in)
+    with db() as conn:
+        for number in range(55):
+            conn.execute(
+                "INSERT INTO messages(actor,target,body,client_id) VALUES(%s,%s,%s,%s)",
+                (a, b, f"Saved message {number}", f"saved-{number}"),
+            )
+    assert (
+        client.delete(f"/api/v1/profiles/{b}/like", headers=sign_in(a)).status_code
+        == 200
+    )
+    for viewer, peer in [(a, b), (b, a)]:
+        headers = sign_in(viewer)
+        conversation = next(
+            item
+            for item in client.get("/api/v1/conversations").json["conversations"]
+            if item["id"] == peer
+        )
+        assert conversation["connected"] is False
+        assert conversation["preview"] == "Saved message 54"
+        first = client.get(f"/api/v1/conversations/{peer}/messages").json
+        assert first["connected"] is False and len(first["messages"]) == 50
+        second = client.get(
+            f"/api/v1/conversations/{peer}/messages?before={first['next_before']}"
+        ).json
+        assert len(second["messages"]) == 5
+        after = client.get(
+            f"/api/v1/conversations/{peer}/messages?after={first['messages'][-1]['id']}"
+        )
+        assert after.status_code == 200 and after.json["messages"] == []
+        assert (
+            client.post(
+                f"/api/v1/conversations/{peer}/messages",
+                json={"body": "Not allowed", "client_id": "closed-chat"},
+                headers=headers,
+            ).status_code
+            == 403
+        )
+        assert (
+            client.post(
+                f"/api/v1/conversations/{peer}/read",
+                json={"through_id": first["messages"][-1]["id"]},
+                headers=headers,
+            ).status_code
+            == 200
+        )
+    assert client.get("/api/v1/me/summary").json["messages"] == 0
+    headers = sign_in(outsider)
+    assert client.get(f"/api/v1/conversations/{a}/messages").status_code == 403
+    assert (
+        client.post(
+            f"/api/v1/conversations/{a}/read", json={"through_id": 1}, headers=headers
+        ).status_code
+        == 403
+    )
+    assert client.get("/api/v1/conversations").json["conversations"] == []
+    # Restoring mutual interest reopens the same history, rather than creating a new chat.
+    headers = sign_in(a)
+    client.post(f"/api/v1/profiles/{b}/like", headers=headers)
+    assert client.get(f"/api/v1/conversations/{b}/messages").json["connected"] is True
+    assert (
+        client.post(
+            f"/api/v1/conversations/{b}/messages",
+            json={"body": "Back again", "client_id": "reconnected"},
+            headers=headers,
+        ).status_code
+        == 201
+    )
+    client.post(f"/api/v1/profiles/{b}/block", headers=headers)
+    for viewer, peer in [(a, b), (b, a)]:
+        sign_in(viewer)
+        assert client.get(f"/api/v1/conversations/{peer}/messages").status_code == 403
+        assert client.get("/api/v1/conversations").json["conversations"] == []
+
+
+def test_unlike_preserves_existing_attachments_but_prevents_uploads(
+    client, accounts, monkeypatch
+):
+    from io import BytesIO
+    import storage
+
+    objects = {}
+    monkeypatch.setattr(
+        storage,
+        "put_object",
+        lambda key, contents, content_type: objects.update({key: contents}),
+    )
+    monkeypatch.setattr(storage, "get_object", lambda key: objects[key])
+    users, sign_in = accounts
+    a, b, outsider = users
+    connect(client, users, sign_in)
+    headers = sign_in(a)
+
+    def upload():
+        return client.post(
+            f"/api/v1/conversations/{b}/attachments",
+            data={
+                "attachment": (BytesIO(b"saved attachment"), "notes.txt"),
+                "attachment_kind": "document",
+                "client_id": "saved-document",
+            },
+            headers=headers,
+        )
+
+    assert upload().status_code == 201
+    message_id = client.get(f"/api/v1/conversations/{b}/messages").json["messages"][-1][
+        "id"
+    ]
+    client.delete(f"/api/v1/profiles/{b}/like", headers=headers)
+    assert upload().status_code == 403
+    for viewer, peer in [(a, b), (b, a)]:
+        sign_in(viewer)
+        response = client.get(
+            f"/api/v1/conversations/{peer}/messages/{message_id}/attachment"
+        )
+        assert response.status_code == 200 and response.data == b"saved attachment"
+    sign_in(outsider)
+    assert (
+        client.get(
+            f"/api/v1/conversations/{a}/messages/{message_id}/attachment"
+        ).status_code
+        == 403
+    )
+    client.post(f"/api/v1/profiles/{b}/block", headers=sign_in(a))
+    sign_in(b)
+    assert (
+        client.get(
+            f"/api/v1/conversations/{a}/messages/{message_id}/attachment"
+        ).status_code
+        == 403
+    )

@@ -86,6 +86,7 @@ export type Message = {
   } | null;
 };
 export type Conversation = {
+  connected: boolean;
   id: number;
   username: string;
   first_name: string;

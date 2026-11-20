@@ -148,8 +148,6 @@ def summary():
         ).fetchone()["n"]
         messages = conn.execute(
             """SELECT count(*) AS n FROM messages m WHERE m.target=%s AND NOT m.is_read
-        AND EXISTS(SELECT 1 FROM likes WHERE actor=m.actor AND target=m.target)
-        AND EXISTS(SELECT 1 FROM likes WHERE target=m.actor AND actor=m.target)
         AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.actor=m.actor AND b.target=m.target) OR (b.actor=m.target AND b.target=m.actor))""",
             (g.uid,),
         ).fetchone()["n"]

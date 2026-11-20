@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 from app import (
     app,
     auth,
+    blocked,
     connected,
     cursor,
     data,
@@ -90,14 +91,28 @@ def message_limit():
     return limit
 
 
+def can_read_conversation(conn, uid):
+    if blocked(conn, g.uid, uid):
+        return False
+    return (
+        connected(conn, g.uid, uid)
+        or conn.execute(
+            "SELECT 1 FROM messages WHERE (actor=%s AND target=%s) OR (actor=%s AND target=%s) LIMIT 1",
+            (g.uid, uid, uid, g.uid),
+        ).fetchone()
+        is not None
+    )
+
+
 @bp.route("/api/v1/conversations/<int:uid>/messages", methods=["GET", "POST"])
 @auth
 def messages(uid):
     with db() as conn:
         pair_lock(conn, g.uid, uid)
-        if not connected(conn, g.uid, uid):
-            fail("A mutual connection is required", 403)
+        is_connected = connected(conn, g.uid, uid)
         if request.method == "GET":
+            if not can_read_conversation(conn, uid):
+                fail("Conversation unavailable", 403)
             limit = message_limit()
             if "after" in request.args:
                 if "before" in request.args:
@@ -112,6 +127,7 @@ def messages(uid):
                     (g.uid, uid, uid, g.uid, after, limit + 1),
                 ).fetchall()
                 return jsonify(
+                    connected=is_connected,
                     messages=attachment_messages(rows[:limit]),
                     next_before=None,
                     next_after=rows[limit - 1]["id"] if len(rows) > limit else None,
@@ -122,10 +138,13 @@ def messages(uid):
                 (g.uid, uid, uid, g.uid, cursor(), limit + 1),
             ).fetchall()
             return jsonify(
+                connected=is_connected,
                 messages=attachment_messages(rows[:limit][::-1]),
                 next_before=rows[limit - 1]["id"] if len(rows) > limit else None,
                 next_after=None,
             )
+        if not is_connected:
+            fail("A mutual connection is required", 403)
         d = data()
         body = text(d.get("body"), "Message", 4000, field="body")
         client_id = text(d.get("client_id"), "Message key", 100)
@@ -248,8 +267,8 @@ def send_attachment(uid):
 def get_message_attachment(uid, message_id):
     with db() as conn:
         pair_lock(conn, g.uid, uid)
-        if not connected(conn, g.uid, uid):
-            fail("A mutual connection is required", 403)
+        if not can_read_conversation(conn, uid):
+            fail("Conversation unavailable", 403)
         attachment = conn.execute(
             """SELECT a.filename,a.display_name,a.content_type,a.attachment_kind
                FROM message_attachments a JOIN messages m ON m.id=a.message_id
@@ -377,7 +396,7 @@ def cancel_date(event_id):
 def conversations():
     with db() as conn:
         rows = conn.execute(
-            """SELECT u.id,u.username,u.first_name,u.last_name,u.last_seen,
+            """SELECT (a.actor IS NOT NULL AND b.actor IS NOT NULL) AS connected,u.id,u.username,u.first_name,u.last_name,u.last_seen,
             EXISTS(SELECT 1 FROM presence p JOIN sessions s ON s.token=p.session_token
                    WHERE s.user_id=u.id AND s.expires_at>now() AND p.expires_at>now()) AS online,
             (SELECT id FROM photos WHERE user_id=u.id AND is_primary) AS photo_id,
@@ -389,10 +408,12 @@ def conversations():
                WHERE own.id=%s AND common_tag.value=ANY(own.tags))) AS common_tags,
             (SELECT max(created_at) FROM notifications WHERE actor=u.id AND target=%s AND kind='match') AS connected_at,
             (SELECT count(*) FROM messages WHERE actor=u.id AND target=%s AND NOT is_read) AS unread
-            FROM users u JOIN likes a ON a.target=u.id AND a.actor=%s JOIN likes b ON b.actor=u.id AND b.target=%s
+            FROM users u LEFT JOIN likes a ON a.target=u.id AND a.actor=%s LEFT JOIN likes b ON b.actor=u.id AND b.target=%s
             WHERE NOT EXISTS(SELECT 1 FROM blocks WHERE (actor=%s AND target=u.id) OR (actor=u.id AND target=%s))
+            AND ((a.actor IS NOT NULL AND b.actor IS NOT NULL)
+              OR EXISTS(SELECT 1 FROM messages WHERE (actor=%s AND target=u.id) OR (actor=u.id AND target=%s)))
             ORDER BY last_message_id DESC NULLS LAST,u.id""",
-            (g.uid,) * 13,
+            (g.uid,) * 15,
         ).fetchall()
     return jsonify(conversations=rows)
 
@@ -403,8 +424,8 @@ def read_messages(uid):
     through = cursor(data().get("through_id"))
     with db() as conn:
         pair_lock(conn, g.uid, uid)
-        if not connected(conn, g.uid, uid):
-            fail("A mutual connection is required", 403)
+        if not can_read_conversation(conn, uid):
+            fail("Conversation unavailable", 403)
         conn.execute(
             "UPDATE messages SET is_read=true WHERE actor=%s AND target=%s AND id<=%s",
             (uid, g.uid, through),

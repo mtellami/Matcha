@@ -14,6 +14,7 @@ import {
 import { Dropdown, Modal, Popover } from "@heroui/react";
 import {
   Paperclip,
+  LockKeyhole,
   ArrowLeft,
   Ban,
   CheckCheck,
@@ -521,6 +522,9 @@ export function Inbox({
     () => items.find((item) => item.id === selectedId) ?? null,
     [items, selectedId],
   );
+  const canMessage = !!selected && selected.connected !== false;
+  const canMessageRef = useRef(canMessage);
+  canMessageRef.current = canMessage;
 
   useLayoutEffect(() => {
     const log = messageLog.current;
@@ -667,6 +671,7 @@ export function Inbox({
 
   const changeDraft = useCallback(
     (value: string) => {
+      if (!canMessageRef.current) return;
       setDraft(value);
       if (!value.trim()) {
         stopTyping();
@@ -693,7 +698,7 @@ export function Inbox({
   );
 
   useEffect(() => {
-    if (!socket || !selectedId) {
+    if (!socket || !selectedId || !canMessage) {
       setPeerTyping(false);
       return;
     }
@@ -737,7 +742,16 @@ export function Inbox({
       }
       setPeerTyping(false);
     };
-  }, [selectedId, socket, stopTyping]);
+  }, [selectedId, socket, stopTyping, canMessage]);
+
+  useEffect(() => {
+    if (canMessage) return;
+    stopTyping();
+    setPeerTyping(false);
+    setEmojiOpen(false);
+    setCameraOpen(false);
+    cancelVoice();
+  }, [canMessage, stopTyping]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -773,6 +787,15 @@ export function Inbox({
         );
         if (!active) return;
         setMessages((current) => mergeMessages(current, response.messages));
+        if (response.connected !== undefined) {
+          setItems((current) =>
+            current.map((item) =>
+              item.id === peerId && item.connected !== response.connected
+                ? { ...item, connected: response.connected! }
+                : item,
+            ),
+          );
+        }
         cursor = response.latest;
         if (initial) setNextBefore(response.next_before);
         const latestId = response.messages.at(-1)?.id;
@@ -795,7 +818,7 @@ export function Inbox({
 
   async function send() {
     const body = draft.trim();
-    if (!selectedId || !body || sending) return;
+    if (!selectedId || !canMessageRef.current || !body || sending) return;
     stopTyping(selectedId);
     const clientId = crypto.randomUUID();
     setSending(true);
@@ -833,7 +856,7 @@ export function Inbox({
     file: File,
     kind: "photo" | "document" | "voice",
   ) {
-    if (!selectedId || sending) return;
+    if (!selectedId || !canMessageRef.current || sending) return;
     if (file.size > 8 * 1024 * 1024) {
       setError("Attachments must be 8 MB or smaller.");
       return;
@@ -913,6 +936,7 @@ export function Inbox({
   }
 
   async function toggleVoiceRecording() {
+    if (!canMessageRef.current) return;
     const current = voiceRecorder.current;
     if (current) {
       if (current.state !== "inactive") current.stop();
@@ -924,6 +948,10 @@ export function Inbox({
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!canMessageRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       voiceStream.current = stream;
       const supportedMime = [
         "audio/webm;codecs=opus",
@@ -1127,7 +1155,10 @@ export function Inbox({
                     </span>
                   </span>
                   <span className="mt-1 block truncate text-xs text-matcha-muted">
-                    {item.preview || "You connected. Say hello!"}
+                    {item.preview ||
+                      (item.connected === false
+                        ? "You’re no longer connected."
+                        : "You connected. Say hello!")}
                   </span>
                 </span>
               </button>
@@ -1284,8 +1315,9 @@ export function Inbox({
                 )}
                 {!threadLoading && !messages.length && (
                   <p className="m-auto max-w-xs text-center text-sm text-matcha-muted">
-                    You’re connected. Send a hello to get the conversation
-                    started.
+                    {canMessage
+                      ? "You’re connected. Send a hello to get the conversation started."
+                      : "No messages in this conversation."}
                   </p>
                 )}
                 {messages.map((message, index) => {
@@ -1444,7 +1476,7 @@ export function Inbox({
                   );
                 })}
               </div>
-              {peerTyping && (
+              {canMessage && peerTyping && (
                 <div
                   role="status"
                   aria-label={`${selected.first_name} is typing`}
@@ -1464,209 +1496,240 @@ export function Inbox({
                   </span>
                 </div>
               )}
-              <form
-                className="shrink-0 border-t border-matcha-border p-3 sm:p-4"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void run(send);
-                }}
-              >
-                <input
-                  ref={documentInput}
-                  className="hidden"
-                  type="file"
-                  aria-label="Choose a document to attach"
-                  onChange={(event) => {
-                    const file = event.currentTarget.files?.[0];
-                    event.currentTarget.value = "";
-                    if (file) void run(() => sendAttachment(file, "document"));
+              {!canMessage ? (
+                <div
+                  role="status"
+                  className="flex shrink-0 items-start gap-3 border-t border-matcha-border bg-matcha-raised/50 p-4 text-sm text-matcha-muted sm:px-6"
+                >
+                  <LockKeyhole
+                    size={19}
+                    className="mt-0.5 shrink-0"
+                    aria-hidden="true"
+                  />
+                  <div>
+                    <strong className="block font-semibold text-matcha-text">
+                      You’re no longer connected
+                    </strong>
+                    <p className="mb-0 mt-1 text-sm">
+                      One of you removed their interest. Your conversation
+                      history is still available, but you can’t send messages
+                      unless you both like each other again.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <form
+                  className="shrink-0 border-t border-matcha-border p-3 sm:p-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void run(send);
                   }}
-                />
-                <div className="relative flex min-h-14 items-center gap-1.5 rounded-full border border-matcha-border bg-matcha-bg py-1 pl-2 pr-2 sm:gap-2 sm:pl-3">
-                  {recording ? (
+                >
+                  <input
+                    ref={documentInput}
+                    className="hidden"
+                    type="file"
+                    aria-label="Choose a document to attach"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      event.currentTarget.value = "";
+                      if (file)
+                        void run(() => sendAttachment(file, "document"));
+                    }}
+                  />
+                  <div className="relative flex min-h-14 items-center gap-1.5 rounded-full border border-matcha-border bg-matcha-bg py-1 pl-2 pr-2 sm:gap-2 sm:pl-3">
+                    {recording ? (
+                      <button
+                        type="button"
+                        onClick={toggleVoicePause}
+                        aria-label={
+                          recordingPaused
+                            ? "Resume recording"
+                            : "Pause recording"
+                        }
+                        title={
+                          recordingPaused
+                            ? "Resume recording"
+                            : "Pause recording"
+                        }
+                        className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-matcha-muted transition-colors hover:bg-matcha-raised hover:text-matcha-text"
+                      >
+                        {recordingPaused ? (
+                          <Play size={18} />
+                        ) : (
+                          <Pause size={18} />
+                        )}
+                      </button>
+                    ) : (
+                      <Dropdown>
+                        <Dropdown.Trigger
+                          type="button"
+                          aria-label="Attach a file"
+                          className="grid size-10 shrink-0 place-items-center rounded-full text-matcha-muted transition-colors hover:bg-matcha-raised hover:text-matcha-text"
+                          isDisabled={sending || recording}
+                        >
+                          <Paperclip size={19} />
+                        </Dropdown.Trigger>
+                        <Dropdown.Popover placement="top start">
+                          <Dropdown.Menu
+                            className="min-w-44 p-1.5"
+                            onAction={(action) => {
+                              if (action === "camera") {
+                                setCameraReady(false);
+                                setCameraOpen(true);
+                              }
+                              if (action === "document")
+                                documentInput.current?.click();
+                            }}
+                          >
+                            <Dropdown.Item
+                              id="camera"
+                              className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
+                            >
+                              <Camera size={17} /> Camera
+                            </Dropdown.Item>
+                            <Dropdown.Item
+                              id="document"
+                              className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
+                            >
+                              <Paperclip size={17} /> Document
+                            </Dropdown.Item>
+                          </Dropdown.Menu>
+                        </Dropdown.Popover>
+                      </Dropdown>
+                    )}
+                    {recording ? (
+                      <button
+                        type="button"
+                        onClick={cancelVoice}
+                        aria-label="Cancel recording"
+                        title="Cancel recording"
+                        className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-matcha-muted transition-colors hover:bg-matcha-raised hover:text-matcha-text"
+                      >
+                        <X size={18} />
+                      </button>
+                    ) : (
+                      <Popover>
+                        <Popover.Trigger
+                          aria-label="Choose an emoji"
+                          className="grid size-10 shrink-0 place-items-center rounded-full text-matcha-muted transition-colors hover:bg-matcha-raised hover:text-matcha-text"
+                        >
+                          <Smile size={19} />
+                        </Popover.Trigger>
+                        <Popover.Content placement="top start">
+                          <Popover.Dialog className="overflow-hidden rounded-2xl border border-matcha-border bg-matcha-surface p-1 shadow-xl">
+                            <Suspense
+                              fallback={
+                                <div className="grid h-[390px] w-[min(360px,calc(100vw-32px))] place-items-center text-sm text-matcha-muted">
+                                  Loading emojis…
+                                </div>
+                              }
+                            >
+                              <EmojiPicker
+                                colorScheme={resolvedTheme}
+                                emojiStyle="native"
+                                width="min(360px, calc(100vw - 32px))"
+                                height={390}
+                                className="matcha-emoji-picker"
+                                style={
+                                  {
+                                    "--epr-bg-color": "var(--surface)",
+                                    "--epr-category-label-bg-color":
+                                      "var(--surface)",
+                                    "--epr-search-input-bg-color":
+                                      "var(--app-bg)",
+                                    "--epr-search-input-bg-color-active":
+                                      "var(--app-bg)",
+                                    "--epr-picker-border-color":
+                                      "var(--border)",
+                                    "--epr-text-color": "var(--text)",
+                                    "--epr-category-label-text-color":
+                                      "var(--text)",
+                                    "--epr-highlight-color": "var(--accent)",
+                                    "--epr-hover-bg-color":
+                                      "var(--surface-raised)",
+                                    "--epr-focus-bg-color":
+                                      "var(--surface-raised)",
+                                    "--epr-search-border-color":
+                                      "var(--border)",
+                                    "--epr-search-border-color-active":
+                                      "var(--accent)",
+                                    "--epr-search-input-text-color":
+                                      "var(--text)",
+                                    "--epr-search-input-placeholder-color":
+                                      "var(--muted)",
+                                    "--epr-category-icon-active-color":
+                                      "var(--accent)",
+                                    "--epr-category-icon-inactive-color":
+                                      "var(--muted)",
+                                    "--epr-preview-border-color":
+                                      "var(--border)",
+                                    "--epr-preview-text-color": "var(--muted)",
+                                    "--epr-emoji-variation-indicator-color":
+                                      "var(--accent)",
+                                    "--epr-emoji-variation-picker-bg-color":
+                                      "var(--surface)",
+                                    "--epr-skin-tone-outer-border-color":
+                                      "var(--border)",
+                                    "--epr-skin-tone-inner-border-color":
+                                      "var(--surface)",
+                                    "--epr-skin-tone-picker-menu-color":
+                                      "var(--surface)",
+                                  } as CSSProperties
+                                }
+                                onEmojiClick={({ emoji }) => {
+                                  setDraft((current) => current + emoji);
+                                }}
+                              />
+                            </Suspense>
+                          </Popover.Dialog>
+                        </Popover.Content>
+                      </Popover>
+                    )}
+                    {recording ? (
+                      <RecordingWaveform
+                        seconds={recordingSeconds}
+                        paused={recordingPaused}
+                        stream={voiceStream.current}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        aria-label="Message"
+                        placeholder={`Message ${fullName(selected)}…`}
+                        maxLength={4000}
+                        value={draft}
+                        onChange={(event) => changeDraft(event.target.value)}
+                        disabled={sending}
+                        className="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm font-normal text-matcha-text outline-none placeholder:text-matcha-muted/70"
+                      />
+                    )}
                     <button
                       type="button"
-                      onClick={toggleVoicePause}
                       aria-label={
-                        recordingPaused ? "Resume recording" : "Pause recording"
+                        recording
+                          ? "Stop and send voice message"
+                          : "Record voice message"
                       }
                       title={
-                        recordingPaused ? "Resume recording" : "Pause recording"
+                        recording
+                          ? "Stop and send voice message"
+                          : "Record voice message"
                       }
-                      className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-matcha-muted transition-colors hover:bg-matcha-raised hover:text-matcha-text"
-                    >
-                      {recordingPaused ? (
-                        <Play size={18} />
-                      ) : (
-                        <Pause size={18} />
-                      )}
-                    </button>
-                  ) : (
-                    <Dropdown>
-                      <Dropdown.Trigger
-                        type="button"
-                        aria-label="Attach a file"
-                        className="grid size-10 shrink-0 place-items-center rounded-full text-matcha-muted transition-colors hover:bg-matcha-raised hover:text-matcha-text"
-                        isDisabled={sending || recording}
-                      >
-                        <Paperclip size={19} />
-                      </Dropdown.Trigger>
-                      <Dropdown.Popover placement="top start">
-                        <Dropdown.Menu
-                          className="min-w-44 p-1.5"
-                          onAction={(action) => {
-                            if (action === "camera") {
-                              setCameraReady(false);
-                              setCameraOpen(true);
-                            }
-                            if (action === "document")
-                              documentInput.current?.click();
-                          }}
-                        >
-                          <Dropdown.Item
-                            id="camera"
-                            className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
-                          >
-                            <Camera size={17} /> Camera
-                          </Dropdown.Item>
-                          <Dropdown.Item
-                            id="document"
-                            className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
-                          >
-                            <Paperclip size={17} /> Document
-                          </Dropdown.Item>
-                        </Dropdown.Menu>
-                      </Dropdown.Popover>
-                    </Dropdown>
-                  )}
-                  {recording ? (
-                    <button
-                      type="button"
-                      onClick={cancelVoice}
-                      aria-label="Cancel recording"
-                      title="Cancel recording"
-                      className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-matcha-muted transition-colors hover:bg-matcha-raised hover:text-matcha-text"
-                    >
-                      <X size={18} />
-                    </button>
-                  ) : (
-                    <Popover>
-                      <Popover.Trigger
-                        aria-label="Choose an emoji"
-                        className="grid size-10 shrink-0 place-items-center rounded-full text-matcha-muted transition-colors hover:bg-matcha-raised hover:text-matcha-text"
-                      >
-                        <Smile size={19} />
-                      </Popover.Trigger>
-                      <Popover.Content placement="top start">
-                        <Popover.Dialog className="overflow-hidden rounded-2xl border border-matcha-border bg-matcha-surface p-1 shadow-xl">
-                          <Suspense
-                            fallback={
-                              <div className="grid h-[390px] w-[min(360px,calc(100vw-32px))] place-items-center text-sm text-matcha-muted">
-                                Loading emojis…
-                              </div>
-                            }
-                          >
-                            <EmojiPicker
-                              colorScheme={resolvedTheme}
-                              emojiStyle="native"
-                              width="min(360px, calc(100vw - 32px))"
-                              height={390}
-                              className="matcha-emoji-picker"
-                              style={
-                                {
-                                  "--epr-bg-color": "var(--surface)",
-                                  "--epr-category-label-bg-color":
-                                    "var(--surface)",
-                                  "--epr-search-input-bg-color":
-                                    "var(--app-bg)",
-                                  "--epr-search-input-bg-color-active":
-                                    "var(--app-bg)",
-                                  "--epr-picker-border-color": "var(--border)",
-                                  "--epr-text-color": "var(--text)",
-                                  "--epr-category-label-text-color":
-                                    "var(--text)",
-                                  "--epr-highlight-color": "var(--accent)",
-                                  "--epr-hover-bg-color":
-                                    "var(--surface-raised)",
-                                  "--epr-focus-bg-color":
-                                    "var(--surface-raised)",
-                                  "--epr-search-border-color": "var(--border)",
-                                  "--epr-search-border-color-active":
-                                    "var(--accent)",
-                                  "--epr-search-input-text-color":
-                                    "var(--text)",
-                                  "--epr-search-input-placeholder-color":
-                                    "var(--muted)",
-                                  "--epr-category-icon-active-color":
-                                    "var(--accent)",
-                                  "--epr-category-icon-inactive-color":
-                                    "var(--muted)",
-                                  "--epr-preview-border-color": "var(--border)",
-                                  "--epr-preview-text-color": "var(--muted)",
-                                  "--epr-emoji-variation-indicator-color":
-                                    "var(--accent)",
-                                  "--epr-emoji-variation-picker-bg-color":
-                                    "var(--surface)",
-                                  "--epr-skin-tone-outer-border-color":
-                                    "var(--border)",
-                                  "--epr-skin-tone-inner-border-color":
-                                    "var(--surface)",
-                                  "--epr-skin-tone-picker-menu-color":
-                                    "var(--surface)",
-                                } as CSSProperties
-                              }
-                              onEmojiClick={({ emoji }) => {
-                                setDraft((current) => current + emoji);
-                              }}
-                            />
-                          </Suspense>
-                        </Popover.Dialog>
-                      </Popover.Content>
-                    </Popover>
-                  )}
-                  {recording ? (
-                    <RecordingWaveform
-                      seconds={recordingSeconds}
-                      paused={recordingPaused}
-                      stream={voiceStream.current}
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      aria-label="Message"
-                      placeholder={`Message ${fullName(selected)}…`}
-                      maxLength={4000}
-                      value={draft}
-                      onChange={(event) => changeDraft(event.target.value)}
                       disabled={sending}
-                      className="min-w-0 flex-1 border-0 bg-transparent py-2 text-sm font-normal text-matcha-text outline-none placeholder:text-matcha-muted/70"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    aria-label={
-                      recording
-                        ? "Stop and send voice message"
-                        : "Record voice message"
-                    }
-                    title={
-                      recording
-                        ? "Stop and send voice message"
-                        : "Record voice message"
-                    }
-                    disabled={sending}
-                    onClick={() => void toggleVoiceRecording()}
-                    className={`grid size-10 shrink-0 cursor-pointer place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-matcha-accent disabled:cursor-wait disabled:opacity-50 ${recording ? "text-matcha-accent" : "text-matcha-muted hover:bg-matcha-raised hover:text-matcha-text"}`}
-                  >
-                    {recording ? <Send size={17} /> : <Mic size={18} />}
-                  </button>
-                </div>
-                <p className="sr-only" aria-live="polite">
-                  {recording
-                    ? `Recording voice message, ${recordingSeconds} seconds.`
-                    : ""}
-                </p>
-              </form>
+                      onClick={() => void toggleVoiceRecording()}
+                      className={`grid size-10 shrink-0 cursor-pointer place-items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-matcha-accent disabled:cursor-wait disabled:opacity-50 ${recording ? "text-matcha-accent" : "text-matcha-muted hover:bg-matcha-raised hover:text-matcha-text"}`}
+                    >
+                      {recording ? <Send size={17} /> : <Mic size={18} />}
+                    </button>
+                  </div>
+                  <p className="sr-only" aria-live="polite">
+                    {recording
+                      ? `Recording voice message, ${recordingSeconds} seconds.`
+                      : ""}
+                  </p>
+                </form>
+              )}
             </>
           ) : selectedId ? (
             <div className="grid flex-1 place-items-center p-8 text-center text-sm text-matcha-muted">

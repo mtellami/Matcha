@@ -412,11 +412,7 @@ export function Discovery({
               setSearchError("");
             }}
             aria-invalid={Boolean(searchError)}
-            aria-describedby={
-              searchError
-                ? "interest-search-help interest-search-error"
-                : "interest-search-help"
-            }
+            aria-describedby={searchError ? "interest-search-error" : undefined}
             className="h-12 w-full !rounded-full !bg-matcha-surface !pl-12 !pr-12"
           />
           {searchText && (
@@ -457,12 +453,6 @@ export function Discovery({
           />
         </div>
       </div>
-      <p
-        id="interest-search-help"
-        className="sr-only text-xs text-matcha-muted sm:not-sr-only sm:-mt-3 sm:mb-6"
-      >
-        Search an exact first name, last name, full name, or username.
-      </p>
       {searchError && (
         <p
           id="interest-search-error"
@@ -757,30 +747,6 @@ export function Discovery({
                     >
                       Interests
                     </h3>
-                    {tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center gap-2 rounded-full border border-matcha-accent/20 bg-matcha-accent/10 py-1.5 pl-3.5 pr-2 text-sm font-semibold text-matcha-accent"
-                          >
-                            {tag}
-                            <button
-                              type="button"
-                              aria-label={`Remove ${tag} interest`}
-                              className="grid size-6 place-items-center rounded-full hover:bg-matcha-accent/15 focus-visible:outline-2 focus-visible:outline-matcha-accent"
-                              onClick={() =>
-                                setTags((current) =>
-                                  current.filter((item) => item !== tag),
-                                )
-                              }
-                            >
-                              <X size={14} />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
                     <input type="hidden" name="tags" value={tags.join(",")} />
                     <div className="flex min-w-0 gap-2">
                       <UiInput
@@ -803,6 +769,35 @@ export function Discovery({
                         <Plus size={19} />
                       </button>
                     </div>
+                    {tags.length > 0 && (
+                      <div
+                        className="flex min-w-0 max-w-full gap-2 overflow-x-auto pb-1"
+                        role="region"
+                        aria-label="Selected interests"
+                        tabIndex={0}
+                      >
+                        {tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-matcha-accent/20 bg-matcha-accent/10 py-1.5 pl-3.5 pr-2 text-sm font-semibold text-matcha-accent"
+                          >
+                            {tag}
+                            <button
+                              type="button"
+                              aria-label={`Remove ${tag} interest`}
+                              className="grid size-6 place-items-center rounded-full hover:bg-matcha-accent/15 focus-visible:outline-2 focus-visible:outline-matcha-accent"
+                              onClick={() =>
+                                setTags((current) =>
+                                  current.filter((item) => item !== tag),
+                                )
+                              }
+                            >
+                              <X size={14} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {tagError && (
                       <p
                         className="m-0 text-xs text-[var(--danger-text)]"
@@ -1013,23 +1008,6 @@ export function Discovery({
                       onChange={(event) => setDraftSort(event.target.value)}
                       options={sortOptions}
                     />
-                  </div>
-                  <div
-                    className="grid grid-cols-2 rounded-xl bg-matcha-raised p-1"
-                    role="group"
-                    aria-label="Sort direction"
-                  >
-                    {["asc", "desc"].map((direction) => (
-                      <button
-                        key={direction}
-                        type="button"
-                        aria-pressed={draftDirection === direction}
-                        onClick={() => setDraftDirection(direction)}
-                        className={`rounded-lg px-3 py-3 text-sm ${draftDirection === direction ? "bg-matcha-surface font-semibold shadow-sm" : "text-matcha-muted"}`}
-                      >
-                        {direction === "asc" ? "Ascending" : "Descending"}
-                      </button>
-                    ))}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-3 border-t border-matcha-border px-6 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">

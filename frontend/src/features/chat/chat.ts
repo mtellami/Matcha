@@ -2,6 +2,7 @@ import { api } from "../../shared/api.ts";
 import type { Message } from "../../shared/types.ts";
 
 export type MessagePage = {
+  connected?: boolean;
   messages: Message[];
   next_before: number | null;
   next_after?: number | null;
@@ -29,6 +30,7 @@ export async function messageUpdates(
   let cursor = after;
   const messages: Message[] = [];
   let nextBefore: number | null = null;
+  let connected: boolean | undefined;
   while (true) {
     const path =
       `/conversations/${peer}/messages` +
@@ -38,6 +40,7 @@ export async function messageUpdates(
           : `?limit=${initialLimit}`
         : `?after=${cursor}`);
     const page = await read(path, signal);
+    connected = page.connected;
     messages.push(...page.messages);
     if (after === null) {
       nextBefore = page.next_before;
@@ -56,6 +59,7 @@ export async function messageUpdates(
     cursor = page.next_after;
   }
   return {
+    connected,
     messages,
     next_before: nextBefore,
     latest: messages.at(-1)?.id ?? after ?? 0,

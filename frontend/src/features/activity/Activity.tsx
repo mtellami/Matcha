@@ -1,6 +1,7 @@
+import { useSearchParams } from "react-router";
 import { UiButton } from "../../shared/UiButton";
 import { useEffect, useRef, useState } from "react";
-import { Check, MailOpen, MessageCircle, User } from "lucide-react";
+import { Check, MailOpen, MessageCircle, User, Users } from "lucide-react";
 import { Switch } from "@heroui/react";
 import { api } from "../../shared/api";
 import { historyWindow } from "./history";
@@ -43,7 +44,21 @@ export function Activity({
   busy: boolean;
   unreadCount: number;
 }) {
-  const [tab, setTab] = useState("notifications");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const tab = tabs.some(([key]) => key === requestedTab)
+    ? requestedTab!
+    : "notifications";
+  function setTab(nextTab: string) {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.set("tab", nextTab);
+        return next;
+      },
+      { preventScrollReset: true },
+    );
+  }
   const [activity, setActivity] = useState<ActivityData | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [next, setNext] = useState<number | null>(null);
@@ -244,13 +259,14 @@ export function Activity({
       >
         <div className="flex w-max min-w-full items-stretch">
           {tabs.map(([key, label], index) => (
-            <UiButton
+            <button
+              type="button"
               role="tab"
               id={`activity-tab-${key}`}
               aria-controls="activity-panel"
               aria-selected={tab === key}
               tabIndex={tab === key ? 0 : -1}
-              className={`h-12 shrink-0 rounded-none border-0 border-b-2 px-2 text-[13px] font-medium leading-none sm:text-sm ${key === "notifications" ? "!w-[142px] !min-w-[142px] !max-w-[142px]" : key === "visitors" ? "!w-[88px] !min-w-[88px] !max-w-[88px]" : key === "connections" ? "!w-[112px] !min-w-[112px] !max-w-[112px]" : key === "likes" ? "!w-[142px] !min-w-[142px] !max-w-[142px]" : key === "sent" ? "!w-[108px] !min-w-[108px] !max-w-[108px]" : "!w-[128px] !min-w-[128px] !max-w-[128px]"} ${tab === key ? "!border-matcha-accent !bg-transparent font-semibold !text-matcha-accent" : "!border-transparent !bg-transparent !text-matcha-muted hover:!bg-matcha-raised/50"}`}
+              className={`inline-flex items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-matcha-accent h-12 shrink-0 !rounded-none !border-0 !border-b-2 px-2 text-[13px] font-medium leading-none sm:text-sm ${key === "notifications" ? "!w-[142px] !min-w-[142px] !max-w-[142px]" : key === "visitors" ? "!w-[88px] !min-w-[88px] !max-w-[88px]" : key === "connections" ? "!w-[112px] !min-w-[112px] !max-w-[112px]" : key === "likes" ? "!w-[142px] !min-w-[142px] !max-w-[142px]" : key === "sent" ? "!w-[108px] !min-w-[108px] !max-w-[108px]" : "!w-[128px] !min-w-[128px] !max-w-[128px]"} ${tab === key ? "!border-matcha-accent !bg-transparent font-semibold !text-matcha-accent" : "!border-transparent !bg-transparent !text-matcha-muted hover:!bg-matcha-raised/50"}`}
               key={key}
               onClick={() => setTab(key)}
               onKeyDown={(event) => {
@@ -281,7 +297,7 @@ export function Activity({
                   {unreadCount}
                 </span>
               )}
-            </UiButton>
+            </button>
           ))}
         </div>
       </div>
@@ -491,9 +507,19 @@ export function Activity({
                   </article>
                 ))}
                 {!connections.length && !error && (
-                  <p className="py-8 text-center text-sm text-matcha-muted">
-                    Your mutual connections will appear here.
-                  </p>
+                  <div className="rounded-2xl border border-matcha-border bg-matcha-surface px-5 py-12 text-center text-matcha-muted">
+                    <Users
+                      className="mx-auto text-matcha-accent"
+                      size={30}
+                      aria-hidden="true"
+                    />
+                    <h2 className="mb-2 mt-3 text-lg font-semibold text-matcha-text">
+                      No connections yet
+                    </h2>
+                    <p className="m-0 text-sm">
+                      Your mutual connections will appear here.
+                    </p>
+                  </div>
                 )}
               </div>
             )}
