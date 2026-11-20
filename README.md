@@ -42,3 +42,5 @@ flowchart LR
 ```
 
 In development, RustFS provides photo storage and Mailpit provides the email inbox. `make dev-down` stops the services while preserving their data.
+
+For Render with Neon, Cloudflare R2, and Brevo, see the [deployment guide](deploy/README.md).

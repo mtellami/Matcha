@@ -1,0 +1,67 @@
+worker_processes 1;
+pid /run/nginx.pid;
+error_log /dev/stderr warn;
+events { worker_connections 1024; }
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    access_log /dev/stdout;
+    sendfile on;
+    server_tokens off;
+
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+    }
+
+    # Render's edge sets the first X-Forwarded-For address to the client IP.
+    # This config is for Render, where incoming requests pass through that edge.
+    map $http_x_forwarded_for $client_ip {
+        default $remote_addr;
+        ~^(?<render_client_ip>[0-9a-fA-F:.]+)(,|$) $render_client_ip;
+    }
+    map $http_x_forwarded_proto $forwarded_proto {
+        default $scheme;
+        https https;
+        http http;
+    }
+
+    server {
+        listen ${PORT};
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+        client_max_body_size 10m;
+
+        location /api/ {
+            proxy_pass http://127.0.0.1:5000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $client_ip;
+            proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        }
+
+        location /socket.io/ {
+            proxy_pass http://127.0.0.1:5000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $client_ip;
+            proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_read_timeout 75s;
+            proxy_buffering off;
+        }
+
+        location /assets/ {
+            try_files $uri =404;
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+            add_header Cache-Control "no-cache";
+        }
+    }
+}
