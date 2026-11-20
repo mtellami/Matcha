@@ -10,7 +10,7 @@ dev: ## Start database, RustFS, and Mailpit for local app development
 	$(DEV) up -d --wait db rustfs mailpit
 
 backend-dev: dev ## Start local infrastructure and run the backend
-	cd backend && set -a && . ../.env && set +a && export DATABASE_URL="$${DATABASE_URL/@db:/@localhost:}" S3_ENDPOINT_URL="$${S3_ENDPOINT_URL/rustfs:/localhost:}" SMTP_HOST=127.0.0.1 APP_ORIGIN=http://localhost:5173 && uv pip install --python .venv/bin/python -r requirements.lock && . .venv/bin/activate && python manage.py migrate && python manage.py storage-init && gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 50 app:app
+	cd backend && set -a && . ../.env && set +a && export DATABASE_URL="$${DATABASE_URL/@db:/@localhost:}" S3_ENDPOINT_URL="$${S3_ENDPOINT_URL/rustfs:/localhost:}" SMTP_HOST=127.0.0.1 APP_ORIGIN=http://localhost:5173 && . .venv/bin/activate && pip install -r requirements.lock && python manage.py migrate && python manage.py storage-init && gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 50 app:app
 
 frontend-dev: ## Run the frontend locally
 	cd frontend && pnpm install --frozen-lockfile && pnpm run dev
