@@ -409,7 +409,7 @@
   min-width: 0;
   aspect-ratio: 1.05;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 2px solid #ffffff88;
   border-radius: 16px;
   opacity: 0.8;
@@ -737,13 +737,33 @@
   inset: 0;
   margin: auto;
   width: min(620px, calc(100vw - 32px));
-  max-height: calc(100dvh - 48px);
-  overflow-y: auto;
-  padding: 24px;
+  max-height: calc(100dvh - 24px);
+  overflow: visible;
+  padding: 16px;
   border: 1px solid var(--border);
   border-radius: 24px;
   background: var(--surface);
   color: var(--text);
+}
+.profile-connection-dialog #profile-conversation {
+  margin: 0;
+}
+.profile-connection-dialog #profile-conversation > div:first-child {
+  margin-bottom: 8px;
+}
+.profile-connection-dialog #profile-conversation > section {
+  margin: 8px 0 0;
+  gap: 8px;
+  padding: 12px;
+}
+.profile-connection-dialog form {
+  gap: 8px;
+  padding-top: 8px;
+}
+.date-picker-calendar-panel {
+  position: fixed;
+  top: max(12px, calc(50% - 280px));
+  left: 50%;
 }
 .profile-connection-dialog::backdrop {
   background: #0008;

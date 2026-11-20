@@ -17,11 +17,13 @@ import {
 import { api, ApiError, setCsrf } from "./shared/api";
 import { Auth } from "./features/auth/Auth";
 import { Activity } from "./features/activity/Activity";
+import { useActivityToast } from "./features/activity/useActivityToast";
 import { Discovery } from "./features/discovery/Discovery";
 import { Inbox } from "./features/inbox/Inbox";
 import { ProfileDetail } from "./features/profile/ProfileDetail";
 import { ProfileEditor } from "./features/profile/ProfileEditor";
 import { ProfileCompletion } from "./features/profile/ProfileCompletion";
+import { Dates } from "./features/dates/Dates";
 import { UserMap } from "./features/map/UserMap";
 import {
   CallManager,
@@ -42,7 +44,8 @@ import {
   useNavigate,
 } from "react-router";
 
-type View = "discover" | "map" | "notifications" | "inbox" | "profile";
+type View =
+  "discover" | "map" | "notifications" | "inbox" | "profile" | "dates";
 type Summary = { notifications: number; messages: number };
 const viewPaths: Record<View, string> = {
   discover: "/discover",
@@ -50,6 +53,7 @@ const viewPaths: Record<View, string> = {
   notifications: "/activity",
   inbox: "/messages",
   profile: "/settings",
+  dates: "/dates",
 };
 function viewFromPath(path: string): View | null {
   return (
@@ -94,6 +98,8 @@ export default function App() {
   const callManager = useRef<CallManagerHandle | null>(null);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [realtimeSocket, setRealtimeSocket] = useState<Socket | null>(null);
+  const { toast, dismissToast, showManualToast } =
+    useActivityToast(realtimeSocket);
   const profileReturnPath = useRef("/discover");
   const navigateRef = useRef(routerNavigate);
   navigateRef.current = routerNavigate;
@@ -103,6 +109,13 @@ export default function App() {
     if (!isProfileRoute(routePath)) setSelected(null);
   }, [routePath]);
   const busy = pending > 0;
+  const notifyUser = useCallback(
+    (message: string) => {
+      setNotice(message);
+      showManualToast(message);
+    },
+    [showManualToast],
+  );
   const redirectToLogin = useCallback(() => {
     navigateRef.current("/login", { replace: true });
     setSelected(null);
@@ -411,7 +424,6 @@ export default function App() {
     <Navigate to="/login" replace />
   ) : selected ? (
     <ProfileDetail
-      revision={revision}
       key={selected.id}
       person={selected}
       myId={me.id}
@@ -422,14 +434,8 @@ export default function App() {
       back={backFromProfile}
       run={run}
       changed={refreshSummary}
-      notify={setNotice}
+      notify={notifyUser}
       busy={busy}
-      startCall={(media) => {
-        const manager = callManager.current;
-        if (!manager)
-          return Promise.reject(new Error("Calling is not available."));
-        return manager.startCall(selected.id, selected.first_name, media);
-      }}
       openMessage={openConversation}
     />
   ) : view === "profile" ? (
@@ -442,7 +448,7 @@ export default function App() {
       me={me}
       saved={loadMe}
       run={run}
-      notify={setNotice}
+      notify={notifyUser}
       busy={busy}
     />
   ) : view === "notifications" ? (
@@ -463,6 +469,23 @@ export default function App() {
       openProfile={openProfile}
       notify={setNotice}
       socket={realtimeSocket}
+      startCall={(id, name, media) => {
+        const manager = callManager.current;
+        if (!manager)
+          return Promise.reject(new Error("Calling is not available."));
+        return manager.startCall(id, name, media);
+      }}
+    />
+  ) : view === "dates" ? (
+    <Dates
+      me={me}
+      run={run}
+      revision={revision}
+      changed={refreshSummary}
+      notify={notifyUser}
+      busy={busy}
+      openProfile={openProfile}
+      openMessage={openConversation}
     />
   ) : !canDiscover(me) ? (
     <ProfileCompletion
@@ -491,7 +514,6 @@ export default function App() {
     <Navigate to="/login" replace />
   ) : selected ? (
     <ProfileDetail
-      revision={revision}
       key={selected.id}
       person={selected}
       myId={me.id}
@@ -505,12 +527,6 @@ export default function App() {
       notify={setNotice}
       busy={busy}
       openMessage={openConversation}
-      startCall={(media) => {
-        const manager = callManager.current;
-        if (!manager)
-          return Promise.reject(new Error("Calling is not available."));
-        return manager.startCall(selected.id, selected.first_name, media);
-      }}
     />
   ) : (
     <p role="status">Loading profile…</p>
@@ -564,7 +580,6 @@ export default function App() {
             view={view}
             profileActive={isProfileRoute(routePath)}
             summary={summary}
-            socket={realtimeSocket}
             busy={busy}
             navigate={navigate}
             openProfile={() => void run(() => openProfile(me.id))}
@@ -582,6 +597,8 @@ export default function App() {
                 });
               })
             }
+            toast={toast}
+            dismissToast={dismissToast}
           />
         ) : (
           <div className="ml-auto flex items-center gap-3.5 text-[13px] text-matcha-muted">
@@ -719,6 +736,7 @@ export default function App() {
             path="/settings"
             element={!ready ? loadingPage : privatePage}
           />
+          <Route path="/dates" element={!ready ? loadingPage : privatePage} />
           <Route path="/profile" element={!ready ? loadingPage : profilePage} />
           <Route
             path="/profile/:profileId"

@@ -51,6 +51,35 @@ ATTACHMENT_TYPES = {
 }
 
 
+@bp.get("/api/v1/dates")
+@auth
+def my_date_events():
+    with db() as conn:
+        rows = conn.execute(
+            """SELECT d.id,d.creator,d.invitee,d.title,d.location,d.details,
+                      d.starts_at,d.status,
+                      CASE WHEN d.creator=%s THEN d.invitee ELSE d.creator END AS other_user_id,
+                      CASE WHEN d.creator=%s THEN peer.first_name ELSE creator.first_name END AS other_first_name,
+                      CASE WHEN d.creator=%s THEN peer.last_name ELSE creator.last_name END AS other_last_name,
+                      CASE WHEN d.creator=%s THEN peer.username ELSE creator.username END AS other_username,
+                      CASE WHEN d.creator=%s
+                           THEN (SELECT p.id FROM photos p WHERE p.user_id=d.invitee AND p.is_primary)
+                           ELSE (SELECT p.id FROM photos p WHERE p.user_id=d.creator AND p.is_primary)
+                      END AS other_photo_id
+               FROM date_events d
+               JOIN users creator ON creator.id=d.creator
+               JOIN users peer ON peer.id=d.invitee
+               WHERE d.creator=%s OR d.invitee=%s
+               ORDER BY CASE WHEN d.starts_at>=now() THEN 0 ELSE 1 END,
+                        d.starts_at ASC,d.id DESC
+               LIMIT 100""",
+            (g.uid, g.uid, g.uid, g.uid, g.uid, g.uid, g.uid),
+        ).fetchall()
+        for event in rows:
+            event["starts_at"] = event["starts_at"].isoformat()
+    return jsonify(events=rows)
+
+
 def attachment_messages(rows):
     for row in rows:
         attachment_id = row.pop("attachment_id")

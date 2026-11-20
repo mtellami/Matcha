@@ -8,6 +8,7 @@ import {
   Link2,
   Unlink,
   CalendarDays,
+  HeartHandshake,
   Check,
   ChevronRight,
   Moon,
@@ -19,8 +20,6 @@ import {
   MessageCircle,
   X,
 } from "lucide-react";
-import type { Socket } from "socket.io-client";
-import { useActivityToast } from "../features/activity/useActivityToast";
 import type { Me } from "./types";
 import { Dropdown } from "@heroui/react";
 import { useTheme } from "./theme";
@@ -35,7 +34,7 @@ const activityIcons: Record<string, typeof Bell> = {
   date_response: CalendarDays,
 };
 
-type Destination = "discover" | "map" | "inbox" | "notifications";
+type Destination = "discover" | "map" | "inbox" | "notifications" | "dates";
 const iconButton =
   "grid shrink-0 place-items-center rounded-full border border-matcha-border bg-transparent p-0 text-matcha-muted transition-colors hover:bg-matcha-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-matcha-accent disabled:opacity-50";
 
@@ -48,7 +47,8 @@ export function AccountNavigation({
   navigate,
   openProfile,
   logout,
-  socket,
+  toast,
+  dismissToast,
 }: {
   me: Me;
   view: string;
@@ -58,14 +58,16 @@ export function AccountNavigation({
   navigate: (view: Destination) => void;
   openProfile: () => void;
   logout: () => void;
-  socket: Socket | null;
+  toast: {
+    id: number;
+    kind: string;
+    text: string;
+    action: { href: string; label: string };
+  } | null;
+  dismissToast: () => void;
 }) {
   const [toastHovered, setToastHovered] = useState(false);
   const [toastFocused, setToastFocused] = useState(false);
-  const { toast, dismissToast } = useActivityToast(
-    socket,
-    toastHovered || toastFocused,
-  );
   useEffect(() => {
     if (!toast) {
       setToastHovered(false);
@@ -298,9 +300,10 @@ export function AccountNavigation({
               aria-label="Account menu"
               autoFocus="first"
               onAction={(key) => {
-                if (key === "profile" || key === "logout") {
+                if (key === "profile" || key === "dates" || key === "logout") {
                   setAccountOpen(false);
                   if (key === "profile") openProfile();
+                  else if (key === "dates") navigate("dates");
                   else logout();
                 }
               }}
@@ -311,6 +314,13 @@ export function AccountNavigation({
                 className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
               >
                 <User size={16} aria-hidden="true" /> Profile
+              </Dropdown.Item>
+              <Dropdown.Item
+                id="dates"
+                textValue="Dates"
+                className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
+              >
+                <HeartHandshake size={16} aria-hidden="true" /> Dates
               </Dropdown.Item>
               <Dropdown.SubmenuTrigger>
                 <Dropdown.Item
@@ -472,6 +482,15 @@ export function AccountNavigation({
               >
                 <User size={16} aria-hidden="true" />
                 Profile
+              </button>
+              <button
+                type="button"
+                className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-left transition-colors ${view === "dates" ? "bg-matcha-accent text-[var(--accent-foreground)] shadow-[0_8px_22px_var(--shadow)]" : "hover:bg-matcha-raised"}`}
+                aria-current={view === "dates" ? "page" : undefined}
+                onClick={() => act(() => navigate("dates"))}
+              >
+                <HeartHandshake size={16} aria-hidden="true" />
+                Dates
               </button>
               <div ref={themeMenu} className="relative w-full">
                 {themeOpen && (

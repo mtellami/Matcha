@@ -2,7 +2,21 @@ import { useLocation } from "react-router";
 import { GenderIcon } from "../../shared/GenderIcon";
 import { UiInput, UiTextarea } from "../../shared/UiInput";
 import { UiButton } from "../../shared/UiButton";
-import { Dropdown, Tooltip } from "@heroui/react";
+import {
+  Dropdown,
+  Tooltip,
+  DatePicker,
+  DateField,
+  Calendar,
+  TimeField,
+} from "@heroui/react";
+import {
+  CalendarDate,
+  CalendarDateTime,
+  getLocalTimeZone,
+  now,
+  Time,
+} from "@internationalized/date";
 import { useEffect, useRef, useState } from "react";
 import {
   Ban,
@@ -17,31 +31,23 @@ import {
   UserRound,
   Flag,
   Heart,
+  HeartHandshake,
   Leaf,
   MapPin,
   MessageCircle,
   MoreHorizontal,
-  Phone,
   Pencil,
   Star,
-  Video,
   X,
 } from "lucide-react";
 import { api, ApiError } from "../../shared/api";
-import type { DatePlan, Profile, Runner } from "../../shared/types";
-
-function localDateTime(value: Date) {
-  return new Date(value.getTime() - value.getTimezoneOffset() * 60_000)
-    .toISOString()
-    .slice(0, 16);
-}
+import type { Profile, Runner } from "../../shared/types";
 
 type Status = Pick<
   Profile,
   "online" | "last_seen" | "connected" | "liked" | "likes_you"
 >;
 export function ProfileDetail({
-  revision,
   person,
   myId,
   editProfile,
@@ -50,10 +56,8 @@ export function ProfileDetail({
   changed,
   notify,
   busy,
-  startCall,
   openMessage,
 }: {
-  revision: number;
   person: Profile;
   myId: number;
   editProfile: () => void;
@@ -62,7 +66,6 @@ export function ProfileDetail({
   changed: () => Promise<void>;
   notify: (message: string) => void;
   busy: boolean;
-  startCall: (media: "audio" | "video") => Promise<void>;
   openMessage: (id: number) => void;
 }) {
   const [profile, setProfile] = useState(person),
@@ -99,9 +102,12 @@ export function ProfileDetail({
         photos[(photoIndex + direction + photos.length) % photos.length].id,
       );
   }
-  const [datePlans, setDatePlans] = useState<DatePlan[]>([]);
+  const [dateValue, setDateValue] = useState<CalendarDate | null>(null);
+  const [dateCalendarOpen, setDateCalendarOpen] = useState(false);
+  const [timeValue, setTimeValue] = useState<Time | null>(null);
+  const [dateTitle, setDateTitle] = useState("");
+  const [dateLocation, setDateLocation] = useState("");
   const [dateError, setDateError] = useState("");
-  const [datesLoading, setDatesLoading] = useState(false);
   const ownProfile = person.id === myId;
   useEffect(() => {
     if (ownProfile) return;
@@ -150,57 +156,6 @@ export function ProfileDetail({
       clearInterval(timer);
     };
   }, [person.id, ownProfile]);
-  useEffect(() => {
-    if (!profile.connected) {
-      setDatePlans([]);
-      return;
-    }
-    let active = true;
-    setDatesLoading(true);
-    api<{ events: DatePlan[] }>(`/conversations/${person.id}/dates`)
-      .then((response) => {
-        if (active) {
-          setDatePlans(response.events);
-          setDateError("");
-        }
-      })
-      .catch((error) => {
-        if (active) setDateError((error as Error).message);
-      })
-      .finally(() => {
-        if (active) setDatesLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [person.id, profile.connected, revision]);
-
-  async function refreshDatePlans() {
-    const response = await api<{ events: DatePlan[] }>(
-      `/conversations/${person.id}/dates`,
-    );
-    setDatePlans(response.events);
-  }
-
-  async function respondToDate(
-    eventId: number,
-    response: "accepted" | "declined",
-  ) {
-    await api(`/dates/${eventId}/rsvp`, "POST", { response });
-    await refreshDatePlans();
-    notify(
-      response === "accepted" ? "Date plan confirmed" : "Invitation declined",
-    );
-  }
-
-  async function cancelDate(eventId: number) {
-    await api(`/dates/${eventId}/cancel`, "POST");
-    await refreshDatePlans();
-    notify("Date plan cancelled");
-  }
-
-  const dateMin = localDateTime(new Date(Date.now() + 10 * 60_000));
-  const dateMax = localDateTime(new Date(Date.now() + 90 * 24 * 60 * 60_000));
   async function relationship() {
     await api(
       `/profiles/${person.id}/like`,
@@ -369,7 +324,18 @@ export function ProfileDetail({
               )}
             </dialog>
           </div>
-          <div className="profile-info-panel">
+          <div className="profile-info-panel relative">
+            {!ownProfile && profile.connected && (
+              <UiButton
+                type="button"
+                className="absolute right-5 top-5 z-10 grid size-12 min-h-12 min-w-12 place-items-center rounded-full border border-matcha-accent/30 bg-matcha-accent/10 p-0 text-matcha-accent shadow-sm transition-transform hover:scale-105 hover:bg-matcha-accent/20"
+                aria-label="Plan a date"
+                title="Plan a date"
+                onClick={() => connectionDialog.current?.showModal()}
+              >
+                <HeartHandshake size={22} aria-hidden="true" />
+              </UiButton>
+            )}
             <div className="profile-meta flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-matcha-muted">
               {profile.city && (
                 <span className="inline-flex items-center gap-2">
@@ -397,7 +363,7 @@ export function ProfileDetail({
                   ? "Online now"
                   : profile.last_seen
                     ? "Last seen " +
-                      new Date(profile.last_seen).toLocaleDateString()
+                      new Date(profile.last_seen).toLocaleString()
                     : "Offline"}
               </span>
               {typeof profile.distance === "number" && (
@@ -579,46 +545,22 @@ export function ProfileDetail({
             </div>
             {profile.connected && (
               <>
-                <UiButton
-                  className="profile-connect-button mt-4 w-fit"
-                  onClick={() => connectionDialog.current?.showModal()}
-                >
-                  <CalendarDays size={16} /> Calls &amp; date plans
-                </UiButton>
                 <dialog
                   ref={connectionDialog}
                   className="profile-connection-dialog"
                   aria-label="Calls and date plans"
                 >
-                  <UiButton
-                    className="ml-auto mb-3"
-                    aria-label="Close calls and date plans"
-                    onClick={() => connectionDialog.current?.close()}
-                  >
-                    <X size={18} />
-                  </UiButton>
                   <section id="profile-conversation" className="chat">
-                    <h2 className="m-0 text-xl">Stay connected</h2>
-                    <div className="my-3 flex flex-wrap items-center gap-2">
+                    <div className="mb-3 flex items-center justify-between gap-4">
+                      <h2 className="m-0 text-xl">Date plans</h2>
                       <UiButton
                         type="button"
-                        disabled={busy}
-                        onClick={() => void run(() => startCall("audio"))}
+                        className="grid size-10 min-h-10 min-w-10 place-items-center rounded-full p-0"
+                        aria-label="Close date plans"
+                        onClick={() => connectionDialog.current?.close()}
                       >
-                        <Phone size={16} /> Audio call
+                        <X size={18} />
                       </UiButton>
-                      <UiButton
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void run(() => startCall("video"))}
-                      >
-                        <Video size={16} /> Video call
-                      </UiButton>
-                      <small className="basis-full text-xs leading-relaxed text-matcha-muted">
-                        Your browser will ask for microphone or camera access.
-                        Calls connect peer to peer, so your network address may
-                        be visible to the other caller.
-                      </small>
                     </div>
                     <section
                       className="my-5 grid min-w-0 gap-4 rounded-2xl border border-matcha-border bg-matcha-surface p-4 sm:p-5"
@@ -629,7 +571,7 @@ export function ProfileDetail({
                           id="date-planner-title"
                           className="m-0 flex items-center gap-2 text-lg font-semibold"
                         >
-                          <CalendarDays size={19} /> Plan a date
+                          <HeartHandshake size={19} /> Plan a date
                         </h3>
                         <p className="mb-0 mt-1 text-sm leading-relaxed">
                           Pick a place and time together. Only this connection
@@ -644,124 +586,24 @@ export function ProfileDetail({
                           {dateError}
                         </p>
                       )}
-                      {datesLoading ? (
-                        <p
-                          className="m-0 text-sm text-matcha-muted"
-                          role="status"
-                        >
-                          Loading date plans…
-                        </p>
-                      ) : datePlans.length > 0 ? (
-                        <ul className="m-0 grid min-w-0 list-none gap-2 p-0">
-                          {datePlans.map((plan) => {
-                            const statusLabel =
-                              plan.status === "pending"
-                                ? plan.creator === myId
-                                  ? "Waiting for a reply"
-                                  : "Invitation"
-                                : plan.status === "accepted"
-                                  ? "Confirmed"
-                                  : plan.status === "declined"
-                                    ? "Declined"
-                                    : "Cancelled";
-                            return (
-                              <li
-                                className="flex min-w-0 flex-col gap-3 rounded-xl border border-matcha-border bg-matcha-bg p-3 sm:flex-row sm:items-center sm:justify-between"
-                                key={plan.id}
-                              >
-                                <div className="grid min-w-0 gap-1.5">
-                                  <strong className="break-words text-sm font-semibold text-matcha-text">
-                                    {plan.title}
-                                  </strong>
-                                  <span className="flex items-center gap-1.5 text-xs text-matcha-muted">
-                                    <CalendarDays size={14} />
-                                    {new Date(plan.starts_at).toLocaleString(
-                                      [],
-                                      {
-                                        dateStyle: "medium",
-                                        timeStyle: "short",
-                                      },
-                                    )}
-                                  </span>
-                                  <span className="flex items-center gap-1.5 text-xs text-matcha-muted">
-                                    <MapPin size={14} /> {plan.location}
-                                  </span>
-                                  {plan.details && (
-                                    <p className="m-0 break-words text-xs leading-relaxed">
-                                      {plan.details}
-                                    </p>
-                                  )}
-                                  <small
-                                    className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${plan.status === "accepted" ? "bg-[var(--success-bg)] text-[var(--success-text)]" : plan.status === "declined" || plan.status === "cancelled" ? "bg-[var(--danger-bg)] text-[var(--danger-text)]" : "bg-matcha-accent/10 text-matcha-accent"}`}
-                                  >
-                                    {statusLabel}
-                                  </small>
-                                </div>
-                                <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                                  {plan.status === "pending" &&
-                                    plan.invitee === myId && (
-                                      <>
-                                        <UiButton
-                                          type="button"
-                                          aria-label={`Accept ${plan.title} invitation`}
-                                          disabled={busy}
-                                          className="min-h-9 rounded-lg px-3 text-xs"
-                                          onClick={() =>
-                                            void run(() =>
-                                              respondToDate(
-                                                plan.id,
-                                                "accepted",
-                                              ),
-                                            )
-                                          }
-                                        >
-                                          <Check size={16} /> Accept
-                                        </UiButton>
-                                        <UiButton
-                                          type="button"
-                                          aria-label={`Decline ${plan.title} invitation`}
-                                          disabled={busy}
-                                          className="min-h-9 rounded-lg px-3 text-xs"
-                                          onClick={() =>
-                                            void run(() =>
-                                              respondToDate(
-                                                plan.id,
-                                                "declined",
-                                              ),
-                                            )
-                                          }
-                                        >
-                                          <X size={16} /> Decline
-                                        </UiButton>
-                                      </>
-                                    )}
-                                  {(plan.status === "pending" ||
-                                    plan.status === "accepted") && (
-                                    <UiButton
-                                      type="button"
-                                      disabled={busy}
-                                      className="min-h-9 rounded-lg px-3 text-xs"
-                                      onClick={() =>
-                                        void run(() => cancelDate(plan.id))
-                                      }
-                                    >
-                                      Cancel plan
-                                    </UiButton>
-                                  )}
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      ) : (
-                        <p className="m-0 text-sm leading-relaxed text-matcha-muted">
-                          No date plans yet. Start with a place you both like.
-                        </p>
-                      )}
                       <form
                         className="grid min-w-0 gap-3 border-t border-matcha-border pt-4"
                         onSubmit={(event) => {
                           event.preventDefault();
+                          if (
+                            !dateTitle.trim() ||
+                            !dateLocation.trim() ||
+                            !dateValue ||
+                            !timeValue
+                          ) {
+                            setDateError(
+                              !dateValue || !timeValue
+                                ? "Choose a date and time before sending."
+                                : "Enter a plan and place before sending.",
+                            );
+                            return;
+                          }
+                          setDateError("");
                           const form = event.currentTarget;
                           const values = new FormData(form);
                           void run(async () => {
@@ -769,17 +611,30 @@ export function ProfileDetail({
                               `/conversations/${person.id}/dates`,
                               "POST",
                               {
-                                title: values.get("title"),
-                                location: values.get("location"),
-                                starts_at: new Date(
-                                  String(values.get("starts_at")),
-                                ).toISOString(),
+                                title: dateTitle.trim(),
+                                location: dateLocation.trim(),
+                                starts_at: new CalendarDateTime(
+                                  dateValue!.year,
+                                  dateValue!.month,
+                                  dateValue!.day,
+                                  timeValue!.hour,
+                                  timeValue!.minute,
+                                  timeValue!.second,
+                                )
+                                  .toDate(getLocalTimeZone())
+                                  .toISOString(),
                                 details: values.get("details") || "",
                               },
                             );
+                            connectionDialog.current?.close();
+                            notify(
+                              "Date plan created. Waiting for their acceptance.",
+                            );
                             form.reset();
-                            await refreshDatePlans();
-                            notify("Date invitation sent");
+                            setDateTitle("");
+                            setDateLocation("");
+                            setDateValue(null);
+                            setTimeValue(null);
                           });
                         }}
                       >
@@ -791,6 +646,10 @@ export function ProfileDetail({
                               placeholder="Coffee and a walk"
                               maxLength={100}
                               required
+                              value={dateTitle}
+                              onChange={(event) =>
+                                setDateTitle(event.target.value)
+                              }
                               className="w-full"
                             />
                           </label>
@@ -801,20 +660,120 @@ export function ProfileDetail({
                               placeholder="A café or meeting spot"
                               maxLength={160}
                               required
+                              value={dateLocation}
+                              onChange={(event) =>
+                                setDateLocation(event.target.value)
+                              }
                               className="w-full"
                             />
                           </label>
-                          <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
-                            Date and time
-                            <UiInput
-                              name="starts_at"
-                              type="datetime-local"
-                              min={dateMin}
-                              max={dateMax}
-                              required
-                              className="w-full"
-                            />
-                          </label>
+                          <div className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted sm:col-span-2">
+                            <span>Date and time</span>
+                            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.65fr)] items-end gap-3">
+                              <DatePicker
+                                className="relative"
+                                value={dateValue}
+                                onChange={setDateValue}
+                                minValue={(() => {
+                                  const min = now(getLocalTimeZone()).add({
+                                    minutes: 10,
+                                  });
+                                  return new CalendarDate(
+                                    min.year,
+                                    min.month,
+                                    min.day,
+                                  );
+                                })()}
+                                maxValue={(() => {
+                                  const max = now(getLocalTimeZone()).add({
+                                    days: 90,
+                                  });
+                                  return new CalendarDate(
+                                    max.year,
+                                    max.month,
+                                    max.day,
+                                  );
+                                })()}
+                              >
+                                <DateField.Group className="flex min-h-12 items-center rounded-xl border border-matcha-border bg-matcha-bg px-3.5 text-sm text-matcha-text">
+                                  <DateField.Input className="flex min-w-0 flex-1 items-center gap-0.5">
+                                    {(segment) => (
+                                      <DateField.Segment
+                                        segment={segment}
+                                        className="rounded px-0.5 outline-none focus:bg-matcha-raised"
+                                      />
+                                    )}
+                                  </DateField.Input>
+                                  <button
+                                    type="button"
+                                    aria-label="Choose date"
+                                    aria-expanded={dateCalendarOpen}
+                                    className="grid size-9 place-items-center rounded-lg hover:bg-matcha-raised"
+                                    onClick={() =>
+                                      setDateCalendarOpen((open) => !open)
+                                    }
+                                  >
+                                    <CalendarDays
+                                      size={17}
+                                      aria-hidden="true"
+                                    />
+                                  </button>
+                                </DateField.Group>
+                                {dateCalendarOpen && (
+                                  <div className="date-picker-calendar-panel z-[1800] rounded-2xl border border-matcha-border bg-matcha-surface p-3 text-matcha-text shadow-xl">
+                                    <Calendar
+                                      aria-label="Choose date"
+                                      className="w-[280px]"
+                                      value={dateValue}
+                                      onChange={(value) => {
+                                        setDateValue(value);
+                                        setDateCalendarOpen(false);
+                                      }}
+                                    >
+                                      <Calendar.Header className="mb-3 flex items-center justify-between">
+                                        <Calendar.NavButton slot="previous" />
+                                        <Calendar.YearPickerTrigger>
+                                          <Calendar.YearPickerTriggerHeading />
+                                          <Calendar.YearPickerTriggerIndicator />
+                                        </Calendar.YearPickerTrigger>
+                                        <Calendar.NavButton slot="next" />
+                                      </Calendar.Header>
+                                      <Calendar.Grid className="w-full">
+                                        <Calendar.GridHeader>
+                                          {(day) => (
+                                            <Calendar.HeaderCell>
+                                              {day}
+                                            </Calendar.HeaderCell>
+                                          )}
+                                        </Calendar.GridHeader>
+                                        <Calendar.GridBody>
+                                          {(date) => (
+                                            <Calendar.Cell date={date} />
+                                          )}
+                                        </Calendar.GridBody>
+                                      </Calendar.Grid>
+                                    </Calendar>
+                                  </div>
+                                )}
+                              </DatePicker>
+                              <TimeField
+                                value={timeValue}
+                                onChange={setTimeValue}
+                                granularity="minute"
+                              >
+                                <TimeField.Group className="flex min-h-12 items-center rounded-xl border border-matcha-border bg-matcha-bg px-3.5 text-sm text-matcha-text">
+                                  <TimeField.Input className="flex items-center gap-1">
+                                    {(segment) => (
+                                      <TimeField.Segment
+                                        segment={segment}
+                                        className="rounded px-0.5 focus:bg-matcha-raised"
+                                      />
+                                    )}
+                                  </TimeField.Input>
+                                </TimeField.Group>
+                              </TimeField>
+                            </div>
+                          </div>
                         </div>
                         <label className="grid min-w-0 gap-1.5 text-sm font-medium text-matcha-muted">
                           A note (optional)
@@ -828,14 +787,14 @@ export function ProfileDetail({
                         </label>
                         <UiButton
                           variant="primary"
-                          className="min-h-11 w-full rounded-xl !border-matcha-accent !bg-matcha-accent font-semibold !text-[var(--accent-foreground)] hover:!bg-matcha-accent/90 sm:w-fit"
-                          disabled={busy}
+                          className="ml-auto min-h-11 w-full rounded-xl !border-matcha-accent !bg-matcha-accent font-semibold !text-[var(--accent-foreground)] hover:!bg-matcha-accent/90 sm:w-fit"
+                          type="submit"
+                          disabled={
+                            busy || !dateTitle.trim() || !dateLocation.trim()
+                          }
                         >
                           Send date invitation
                         </UiButton>
-                        <small className="text-xs text-matcha-muted">
-                          Plans can be scheduled up to 90 days ahead.
-                        </small>
                       </form>
                     </section>
                   </section>

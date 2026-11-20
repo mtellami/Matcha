@@ -15,12 +15,19 @@ const descriptions: Record<string, string> = {
 };
 
 export function useActivityToast(socket: Socket | null, paused = false) {
+  const [manualToast, setManualToast] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     id: number;
     kind: string;
     text: string;
     action: ReturnType<typeof notificationAction>;
   } | null>(null);
+
+  // Expose a way to show a toast manually
+  const showManualToast = (message: string) => {
+    setManualToast(message);
+  };
+
   useEffect(() => {
     setToast(null);
     if (!socket) return;
@@ -67,9 +74,28 @@ export function useActivityToast(socket: Socket | null, paused = false) {
     };
   }, [socket]);
   useEffect(() => {
-    if (!toast || paused) return;
-    const timer = setTimeout(() => setToast(null), 8000);
+    if (!manualToast && (!toast || paused)) return;
+    const timer = setTimeout(() => {
+      setToast(null);
+      setManualToast(null);
+    }, 8000);
     return () => clearTimeout(timer);
-  }, [toast, paused]);
-  return { toast, dismissToast: () => setToast(null) };
+  }, [toast, manualToast, paused]);
+  return {
+    toast:
+      toast ??
+      (manualToast
+        ? {
+            id: 0,
+            kind: "info",
+            text: manualToast,
+            action: { href: "/dates", label: "View dates" },
+          }
+        : null),
+    dismissToast: () => {
+      setToast(null);
+      setManualToast(null);
+    },
+    showManualToast,
+  };
 }

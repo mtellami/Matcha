@@ -439,14 +439,16 @@ export const CallManager = forwardRef<CallManagerHandle>(
         )}
         {call && (
           <section
-            className="fixed bottom-[22px] right-[22px] z-[2500] grid w-[min(420px,calc(100vw-32px))] gap-3 rounded-2xl border border-matcha-border bg-matcha-surface p-4 shadow-[0_16px_48px_var(--shadow)] max-sm:bottom-3 max-sm:right-3 max-[950px]:[grid-template-columns:repeat(2,_1fr)] max-[600px]:[gap:14px]"
+            className="fixed bottom-4 right-4 z-[2500] grid max-h-[calc(100dvh-2rem)] w-[min(420px,calc(100vw-2rem))] grid-cols-1 gap-4 overflow-y-auto rounded-2xl border border-matcha-border bg-matcha-surface p-4 shadow-[0_16px_48px_var(--shadow)] sm:bottom-6 sm:right-6 sm:p-5"
             role="dialog"
             aria-label={`${call.media} call with ${call.peer_name}`}
           >
-            <div className="call-panel-heading [display:flex] [align-items:center] [justify-content:space-between] [gap:12px] [&_strong]:[display:block] [&_span]:[display:block] [&_span]:[margin-top:3px] [&_span]:[color:var(--muted)] [&_span]:[font-size:12px]">
-              <div>
-                <strong>{call.peer_name}</strong>
-                <span>
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <div className="min-w-0">
+                <strong className="block truncate text-base font-semibold text-matcha-text">
+                  {call.peer_name}
+                </strong>
+                <span className="mt-1 block text-xs text-matcha-muted">
                   {call.phase === "incoming"
                     ? `Incoming ${call.media} call`
                     : call.phase === "calling"
@@ -458,13 +460,18 @@ export const CallManager = forwardRef<CallManagerHandle>(
                           : "Connecting…"}
                 </span>
               </div>
-              {call.media === "audio" && <Phone size={19} aria-hidden="true" />}
-              {call.media === "video" && <Video size={19} aria-hidden="true" />}
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-matcha-raised text-matcha-accent">
+                {call.media === "audio" ? (
+                  <Phone size={18} aria-hidden="true" />
+                ) : (
+                  <Video size={18} aria-hidden="true" />
+                )}
+              </span>
             </div>
-            <div className="call-media [position:relative] [display:grid] [place-items:center] [min-height:190px] [overflow:hidden] [border-radius:12px] [background:var(--text)] [background:var(--media-bg)]">
-              {call.media === "audio" && (
+            <div className="relative grid aspect-video min-h-[180px] w-full place-items-center overflow-hidden rounded-xl bg-[var(--media-bg)] sm:min-h-[210px]">
+              {(call.media === "audio" || !remoteStream) && (
                 <div
-                  className="audio-call-avatar [display:grid] [place-items:center] [width:86px] [height:86px] [border-radius:50%] [color:var(--surface)] [background:var(--accent)] [font-size:34px]"
+                  className="grid size-20 place-items-center rounded-full bg-matcha-accent text-3xl font-semibold text-[var(--accent-foreground)] shadow-lg sm:size-24"
                   aria-hidden="true"
                 >
                   {call.peer_name.slice(0, 1).toUpperCase()}
@@ -476,8 +483,8 @@ export const CallManager = forwardRef<CallManagerHandle>(
                 playsInline
                 className={
                   call.media === "audio"
-                    ? "call-remote audio-only"
-                    : "call-remote"
+                    ? "sr-only"
+                    : "absolute inset-0 size-full object-cover"
                 }
                 aria-label={`${call.peer_name}'s video`}
               />
@@ -487,41 +494,44 @@ export const CallManager = forwardRef<CallManagerHandle>(
                   autoPlay
                   muted
                   playsInline
-                  className="call-local [position:absolute] [right:10px] [bottom:10px] [width:92px] [height:124px] [border:2px_solid_var(--surface)] [border-radius:9px] [background:var(--media-bg)] [object-fit:cover]"
+                  className="absolute bottom-3 right-3 aspect-[3/4] w-20 rounded-lg border-2 border-matcha-surface bg-[var(--media-bg)] object-cover shadow-lg sm:w-24"
                   aria-label="Your video preview"
                 />
               )}
             </div>
             {callError && (
               <p
-                className="call-panel-error [margin:0] [color:var(--danger-text)] [font-size:13px]"
+                className="m-0 rounded-lg bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger-text)]"
                 role="alert"
               >
                 {callError}
               </p>
             )}
             {call.phase === "incoming" ? (
-              <div className="call-actions [display:flex] [justify-content:center] [gap:10px] [&_button]:[display:inline-flex] [&_button]:[align-items:center] [&_button]:[justify-content:center] [&_button]:[gap:7px] [&_button]:[min-height:42px] [&_.call-decline]:[color:#fff] [&_.call-decline]:[border-color:#a53127] [&_.call-decline]:[background:#a53127]">
+              <div className="flex items-center justify-center gap-3">
                 <UiButton
                   type="button"
-                  className="border-[#a53127] bg-[#a53127] text-white hover:bg-[#8f2823]"
+                  className="!min-h-11 !rounded-full !border-[var(--danger-text)] !bg-[var(--danger-text)] !px-4 !text-white hover:!opacity-90"
                   onClick={() => void declineCall()}
                 >
                   <PhoneOff size={17} /> Decline
                 </UiButton>
                 <UiButton
                   type="button"
-                  className="border-matcha-accent bg-matcha-accent text-matcha-raised hover:opacity-90"
+                  variant="primary"
+                  className="!min-h-11 !rounded-full !border-[var(--accent)] !bg-[var(--accent)] !px-5 !text-[var(--accent-foreground)] hover:!opacity-90"
                   onClick={() => void acceptCall()}
                 >
                   <Phone size={17} /> Answer
                 </UiButton>
               </div>
             ) : (
-              <div className="call-actions [display:flex] [justify-content:center] [gap:10px] [&_button]:[display:inline-flex] [&_button]:[align-items:center] [&_button]:[justify-content:center] [&_button]:[gap:7px] [&_button]:[min-height:42px] [&_.call-decline]:[color:#fff] [&_.call-decline]:[border-color:#a53127] [&_.call-decline]:[background:#a53127]">
+              <div className="flex items-center justify-center gap-3">
                 <UiButton
                   type="button"
                   aria-label={muted ? "Unmute microphone" : "Mute microphone"}
+                  title={muted ? "Unmute microphone" : "Mute microphone"}
+                  className="!size-11 !min-h-11 !rounded-full !p-0"
                   onClick={toggleMicrophone}
                 >
                   {muted ? <MicOff size={18} /> : <Mic size={18} />}
@@ -532,6 +542,8 @@ export const CallManager = forwardRef<CallManagerHandle>(
                     aria-label={
                       cameraOff ? "Turn camera on" : "Turn camera off"
                     }
+                    title={cameraOff ? "Turn camera on" : "Turn camera off"}
+                    className="!size-11 !min-h-11 !rounded-full !p-0"
                     onClick={toggleCamera}
                   >
                     {cameraOff ? <VideoOff size={18} /> : <Video size={18} />}
@@ -539,7 +551,7 @@ export const CallManager = forwardRef<CallManagerHandle>(
                 )}
                 <UiButton
                   type="button"
-                  className="call-decline"
+                  className="!min-h-11 !rounded-full !border-[var(--danger-text)] !bg-[var(--danger-text)] !px-4 !text-white hover:!opacity-90"
                   aria-label="End call"
                   onClick={() => void endCall()}
                 >

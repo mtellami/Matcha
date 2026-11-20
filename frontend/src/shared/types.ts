@@ -58,6 +58,11 @@ export type DatePlan = {
   details: string;
   starts_at: string;
   status: "pending" | "accepted" | "declined" | "cancelled";
+  other_user_id?: number;
+  other_first_name?: string;
+  other_last_name?: string;
+  other_username?: string;
+  other_photo_id?: number | null;
 };
 export type Notification = {
   id: number;

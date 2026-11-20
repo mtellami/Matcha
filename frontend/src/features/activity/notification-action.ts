@@ -10,7 +10,7 @@ export function notificationAction(item: Pick<Notification, "actor" | "kind">) {
     case "date_invite":
     case "date_response":
       return {
-        href: `/profile/${item.actor}#date-plans`,
+        href: "/dates",
         label: "View date plan",
       };
     case "visit":

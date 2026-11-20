@@ -26,6 +26,8 @@ import {
   Mic,
   MessageCircle,
   MoreHorizontal,
+  Phone,
+  Video,
   ExternalLink,
   Send,
   Pause,
@@ -460,6 +462,7 @@ export function Inbox({
   openProfile,
   notify,
   socket,
+  startCall,
 }: {
   revision: number;
   run: Runner;
@@ -467,6 +470,11 @@ export function Inbox({
   openProfile: (id: number) => Promise<void>;
   notify: (message: string) => void;
   socket: Socket | null;
+  startCall: (
+    id: number,
+    name: string,
+    media: "audio" | "video",
+  ) => Promise<void>;
 }) {
   const { resolvedTheme } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1224,54 +1232,99 @@ export function Inbox({
                     </span>
                   </span>
                 </button>
-                <Dropdown>
-                  <Dropdown.Trigger
-                    isDisabled={recording || sending}
-                    aria-label="More conversation actions"
-                    className="ml-auto grid size-10 shrink-0 place-items-center rounded-full border border-matcha-border bg-matcha-surface text-matcha-text hover:bg-matcha-raised"
+                <div className="ml-auto flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={
+                      recording ||
+                      sending ||
+                      !selected.connected ||
+                      !selected.online
+                    }
+                    aria-label="Start audio call"
+                    title="Audio call"
+                    className="grid size-10 shrink-0 place-items-center rounded-full border border-matcha-border bg-matcha-surface text-matcha-text hover:bg-matcha-raised disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() =>
+                      void run(() =>
+                        startCall(selected.id, selected.first_name, "audio"),
+                      )
+                    }
                   >
-                    <MoreHorizontal size={20} />
-                  </Dropdown.Trigger>
-                  <Dropdown.Popover placement="bottom end">
-                    <Dropdown.Menu
-                      className="min-w-48 p-1.5"
-                      onAction={(action) => {
-                        if (action === "block") {
-                          void run(async () => {
-                            await api(`/profiles/${selected.id}/block`, "POST");
-                            await changed();
-                            setSearchParams({});
-                          });
-                        }
-                        if (action === "report") {
-                          void run(async () => {
-                            await api(
-                              `/profiles/${selected.id}/reports`,
-                              "POST",
-                              {
-                                reason: "Suspected fake account",
-                              },
-                            );
-                            notify("Your report has been received. Thank you.");
-                          });
-                        }
-                      }}
+                    <Phone size={18} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      recording ||
+                      sending ||
+                      !selected.connected ||
+                      !selected.online
+                    }
+                    aria-label="Start video call"
+                    title="Video call"
+                    className="grid size-10 shrink-0 place-items-center rounded-full border border-matcha-border bg-matcha-surface text-matcha-text hover:bg-matcha-raised disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() =>
+                      void run(() =>
+                        startCall(selected.id, selected.first_name, "video"),
+                      )
+                    }
+                  >
+                    <Video size={18} aria-hidden="true" />
+                  </button>
+                  <Dropdown>
+                    <Dropdown.Trigger
+                      isDisabled={recording || sending}
+                      aria-label="More conversation actions"
+                      className="grid size-10 shrink-0 place-items-center rounded-full border border-matcha-border bg-matcha-surface text-matcha-text hover:bg-matcha-raised"
                     >
-                      <Dropdown.Item
-                        id="block"
-                        className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
+                      <MoreHorizontal size={20} />
+                    </Dropdown.Trigger>
+                    <Dropdown.Popover placement="bottom end">
+                      <Dropdown.Menu
+                        className="min-w-48 p-1.5"
+                        onAction={(action) => {
+                          if (action === "block") {
+                            void run(async () => {
+                              await api(
+                                `/profiles/${selected.id}/block`,
+                                "POST",
+                              );
+                              await changed();
+                              setSearchParams({});
+                            });
+                          }
+                          if (action === "report") {
+                            void run(async () => {
+                              await api(
+                                `/profiles/${selected.id}/reports`,
+                                "POST",
+                                {
+                                  reason: "Suspected fake account",
+                                },
+                              );
+                              notify(
+                                "Your report has been received. Thank you.",
+                              );
+                            });
+                          }
+                        }}
                       >
-                        <Ban size={17} /> Block
-                      </Dropdown.Item>
-                      <Dropdown.Item
-                        id="report"
-                        className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
-                      >
-                        <Flag size={17} /> Report fake
-                      </Dropdown.Item>
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
+                        <Dropdown.Item
+                          id="block"
+                          className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
+                        >
+                          <Ban size={17} /> Block
+                        </Dropdown.Item>
+                        <Dropdown.Item
+                          id="report"
+                          className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-matcha-text"
+                        >
+                          <Flag size={17} /> Report fake
+                        </Dropdown.Item>
+                      </Dropdown.Menu>
+                    </Dropdown.Popover>
+                  </Dropdown>
+                </div>
               </header>
               <div
                 ref={messageLog}
